@@ -1,0 +1,12 @@
+import numpy as np
+import pytest
+
+
+@pytest.fixture
+def bit_data():
+    return np.array([[1, 0, 1, 0, 1, 0],
+                     [0, 1, 0, 1, 0, 1],
+                     [1, 1, 0, 1, 0, 1],
+                     [1, 1, 1, 1, 1, 1],
+                     [0, 1, 1, 1, 1, 1],
+                     [0, 1, 0, 1, 0, 1]])
