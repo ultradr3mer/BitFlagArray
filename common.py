@@ -1,5 +1,5 @@
 from argparse import ArgumentError
-from typing import TypeVar, Generic, Type
+from typing import TypeVar, Generic, Type, List, Iterable, Any
 
 import numpy as np
 
@@ -40,7 +40,7 @@ def get_type_for_scalar(value: int):
 def get_type_for_bit_count(bit_count: int):
     return _get_type(bit_count, "bits")
 
-def get_type_for_array(ary: np.ndarray):
+def get_type_for_array(ary: np.ndarray | List[Any] | Iterable[Any]):
     return _get_type(np.max(ary), "max")
 
 

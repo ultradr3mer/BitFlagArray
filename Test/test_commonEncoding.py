@@ -42,6 +42,17 @@ def test_get_number_axis_1(bit_data):
                  dtype=values.dtype),
     )
 
+def test_get_number_zero_list(bit_data):
+    value = get_number([0]) #[c[0] for c in [(0, 0)]]))
+    np.testing.assert_array_equal(
+        value,
+        np.array([0]))
+
+def test_get_number_3_list(bit_data):
+    value = get_number([1, 1])  # [c[0] for c in [(0, 0)]]))
+    np.testing.assert_array_equal(
+        value,
+        np.array([3]))
 
 def test_get_number_long_axis_0(long_data):
     values, bc = get_number(long_data, axis=0)
