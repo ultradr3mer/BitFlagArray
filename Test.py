@@ -1,8 +1,8 @@
 # content of test_sample.py
 import numpy as np
 
-from OpenCode.commonEncoding import get_number
-from OpenCode.BitFlagArray import BitFlagArray, NBitAryTpl, NBitArray, SliceView, Bitty
+from commonEncoding import get_number
+from BitFlagArray.BitFlagArray import BitFlagArray, NBitAryTpl, NBitArray, SliceView, Bitty
 
 test = np.array((get_number([1, 0, 1, 0, 1, 0]),
                  get_number([0, 1, 0, 1, 0, 1]),

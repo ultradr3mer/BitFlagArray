@@ -1,6 +1,6 @@
 from typing import Tuple, List
 
-from OpenCode.BitFlagArray import SliceView, sliceTypes
+from BitFlagArray import SliceView, sliceTypes
 
 
 def slice_debug(view: SliceView):

@@ -1,11 +1,12 @@
 from abc import abstractmethod, abstractproperty, ABC
-from typing import Iterable, List, NamedTuple, Tuple
+from dataclasses import dataclass
+from typing import List, Iterable, Tuple
 
 import numpy as np
 import numpy.typing as npt
 
-from OpenCode.common import get_type_for_bit_count, get_type_for_scalar
-from OpenCode.commonEncoding import get_number, get_bits, get_bitmask
+from common import get_type_for_bit_count, get_type_for_scalar
+from commonEncoding import get_bitmask, get_number, get_bits
 
 
 def slice_union(s1: slice, s2: slice) -> slice:
@@ -172,9 +173,6 @@ class NBitArray(ABC):
     def get_bitwise(self):
         return get_bits(self.get_array(), self.get_bit_count())
 
-# class SelectableNBitArray(NBitArray):
-#     """Interface for arrays of variable item bit count."""
-
     @abstractproperty
     def b(self) -> SliceView:
         """View for bitwise selection."""
@@ -183,14 +181,8 @@ class NBitArray(ABC):
     def i(self) -> SliceView:
         """View for bitwise selection."""
 
-    def __getitem__(self, key) -> SliceView:
-        """View for bitwise reading items."""
-
-    def __setitem__(self, key, value):
-        """View for bitwise reading items."""
-
-
-class NBitAryTpl(NamedTuple, NBitArray):
+@dataclass
+class NBitAryTpl(NBitArray):
     array: np.ndarray
     bit_count: int
 
@@ -208,11 +200,13 @@ class NBitAryTpl(NamedTuple, NBitArray):
     def i(self) -> SliceView:
         return SliceView(self, is_bit_slice=False)
 
+
 class BitFlagArray(NBitArray):
     def __init__(self, a: NBitArray | np.ndarray, max_bit: int = 0):
         if isinstance(a, NBitArray) or isinstance(a, SliceView):
             self.array = a.get_array()
             self.bit_count = min(a.get_bit_count(), max_bit) if max_bit > 0 else a.get_bit_count()
+            # self.item_count = len(self.array)
             return
         if not isinstance(a, np.ndarray) or not np.issubdtype(a.dtype, np.integer):
             raise ValueError("Eingabe muss ein numpy-Integer-Array sein.")
@@ -242,7 +236,7 @@ class BitFlagArray(NBitArray):
         return SliceView(self, is_bit_slice=False)
 
     @staticmethod
-    def stack_bit(*arrays: NBitArray):
+    def stack_bit_arys(*arrays: NBitArray):
         all_item_counts = np.array([a.get_item_count() for a in arrays])
         item_count = all_item_counts[0]
         if (item_count != all_item_counts[1:]).any():
@@ -258,6 +252,25 @@ class BitFlagArray(NBitArray):
             bitshift += item.get_bit_count()
 
         return BitFlagArray(array, bit_count)
+
+    @classmethod
+    def stack_n_bits(cls, *arrays: np.ndarray, bit_count: int | List[int] | None = None):
+        if bit_count is None:
+            ary = [NBitAryTpl(a, np.iinfo(a).bits) for a in arrays]
+        elif isinstance(bit_count, List):
+            ary = [NBitAryTpl(a, count) for a, count in zip(arrays, bit_count)]
+        elif isinstance(bit_count, int):
+            ary = [NBitAryTpl(a, bit_count) for a in arrays]
+        else:
+            raise TypeError("Unsupported type for bit_count")
+
+        return cls.stack_bit_arys(*ary)
+
+    @classmethod
+    def stack_bit(cls, ary: np.ndarray, axis=0):
+        tpl: Tuple[np.ndarray,int] = get_number(ary, axis)
+        return BitFlagArray(NBitAryTpl(*tpl))
+
 
     @staticmethod
     def stack_items(*arrays: NBitArray):
@@ -315,7 +328,7 @@ class SliceView(NBitArray):
         view.write(value)
 
     def get_array(self) -> np.ndarray:
-        return self.read()[0]
+        return self.read().get_array()
 
     def read(self):
         items = self.data.get_array()[self.item_slice]
@@ -344,59 +357,150 @@ if __name__ == "__main__":
     #                  get_number([0,1,0,1,0,1,1,1,1,1,1,1,1,1,1,1]),
     #                  get_number([0,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1])))
     # result = divide_without(test,4, 16)
-    bits = np.array([[1, 0, 1, 0, 1, 0],
+    test = np.array([[1, 0, 1, 0, 1, 0],
                      [0, 1, 0, 1, 0, 1],
                      [1, 1, 0, 1, 0, 1],
                      [1, 1, 1, 1, 1, 1],
                      [0, 1, 1, 1, 1, 1],
                      [0, 1, 0, 1, 0, 1]])
-    test = get_number(bits)
-    bitty = Bitty(test, max_bit=6)
-    print(bitty)
-    test1 = bitty.b[1:4]
-    test2 = test1[1:4]
-    print(test2)
-    test2 = test1[[1,2,3]]
-    print(test2)
-    selection = bitty[1:4][1:4]
-    print(selection)
-    selection.write(np.full_like(selection, selection.get_max_item()))
-    print(selection)
-    print(bitty)
+    # bitty = Bitty.stack_bit(test)
+    # print(bitty)
+    # test1 = bitty.b[1:4]
+    # print(test1)
+    # test2 = test1.i[1:4]
+    # print(test2)
+    # test2 = test1[[1,2,3]]
+    # print(test2)
+    # selection = bitty.b[1:4][1:4]
+    # print(selection)
+    # selection.write(np.full_like(selection, selection.get_max_item()))
+    # print(selection)
+    # print(bitty)
+    # # AUSGABE
+    # # <class '__main__.BitFlagArray'>, bit_length=6,
+    # # [[1 0 1 0 1 0]
+    # #  [0 1 0 1 0 1]
+    # #  [1 1 0 1 0 1]
+    # #  [1 1 1 1 1 1]
+    # #  [0 1 1 1 1 1]
+    # #  [0 1 0 1 0 1]]
+    # # <class '__main__.SliceView'>, bit_length=3,
+    # # [[0 1 0]
+    # #  [1 0 1]
+    # #  [1 0 1]
+    # #  [1 1 1]
+    # #  [1 1 1]
+    # #  [1 0 1]]
+    # # <class '__main__.SliceView'>, bit_length=3,
+    # # [[1 0 1]
+    # #  [1 0 1]
+    # #  [1 1 1]]
+    # # <class '__main__.SliceView'>, bit_length=3,
+    # # [[1 0 1]
+    # #  [1 0 1]
+    # #  [1 1 1]]
+    # # <class '__main__.SliceView'>, bit_length=3,
+    # # [[1 0 1]
+    # #  [1 0 1]
+    # #  [1 1 1]]
+    # # <class '__main__.SliceView'>, bit_length=3,
+    # # [[1 1 1]
+    # #  [1 1 1]
+    # #  [1 1 1]]
+    # # <class '__main__.BitFlagArray'>, bit_length=6,
+    # # [[1 0 1 0 1 0]
+    # #  [0 1 1 1 0 1]
+    # #  [1 1 1 1 0 1]
+    # #  [1 1 1 1 1 1]
+    # #  [0 1 1 1 1 1]
+    # #  [0 1 0 1 0 1]]
 
-    # bitty = Bitty(test, max_bit=6, bit_slice_first=True)
-    # arranged = bitty[2:5]
-    # print(arranged)
-    # selection = bitty[3:]
-    # bitty[3:] = np.full_like(selection, selection.get_max_item())
+    # bitty = Bitty.stack_bit(test)
+    # selection = bitty.b[3:]
+    # bitty.b[3:] = np.full_like(selection, selection.get_max_item())
     # print(selection)
     #
     # print(bitty)
-
-    # test3 = bitty[1]
-    # print(test3)
+    # # AUSGABE
+    # # <class '__main__.SliceView'>, bit_length=3,
+    # # [[1 1 1]
+    # #  [1 1 1]
+    # #  [1 1 1]
+    # #  [1 1 1]
+    # #  [1 1 1]
+    # #  [1 1 1]]
+    # # <class '__main__.BitFlagArray'>, bit_length=6,
+    # # [[1 0 1 1 1 1]
+    # #  [0 1 0 1 1 1]
+    # #  [1 1 0 1 1 1]
+    # #  [1 1 1 1 1 1]
+    # #  [0 1 1 1 1 1]
+    # #  [0 1 0 1 1 1]]
+    #
+    # # test3 = bitty[1]
+    # # print(test3)
 
     # split = -2
-
-    # bitty = Bitty(test, max_bit=6, bit_slice_first=True)
-    # test1 = bitty[:split]
+    #
+    # bitty = Bitty.stack_bit(test)
+    # test1 = bitty.b[:split]
     # test1.read()
     # print(test1)
-    # test2 = bitty[split:]
+    # test2 = bitty.b[split:]
     # print(test2)
-    # new_bitty = Bitty.stack_bit(test1, test2)
+    # new_bitty = Bitty.stack_bit_arys(test1, test2)
     # print(new_bitty)
-    #
-    # bitty = Bitty(test, max_bit=6, bit_slice_first=True)
-    # group_indices = [np.nonzero(bitty[split] == b)[0] for b in range(2)]
-    # print(group_indices)
-    # grop1 = bitty[:][group_indices[0]]
-    # print(grop1)
-    # new_bt1 = Bitty.stack_bit(grop1[:split], grop1[split + 1:])
-    # print(new_bt1)
-    # grop2 = bitty[:][group_indices[1]]
-    # print(grop2)
-    # new_bt2 = Bitty.stack_bit(grop2[:split], grop2[split + 1:])
-    # print(new_bt2)
+    # # <class '__main__.SliceView'>, bit_length=4,
+    # # [[1 0 1 0]
+    # #  [0 1 0 1]
+    # #  [1 1 0 1]
+    # #  [1 1 1 1]
+    # #  [0 1 1 1]
+    # #  [0 1 0 1]]
+    # # <class '__main__.SliceView'>, bit_length=2,
+    # # [[1 0]
+    # #  [0 1]
+    # #  [0 1]
+    # #  [1 1]
+    # #  [1 1]
+    # #  [0 1]]
+    # # <class '__main__.BitFlagArray'>, bit_length=6,
+    # # [[1 0 1 0 1 0]
+    # #  [0 1 0 1 0 1]
+    # #  [1 1 0 1 0 1]
+    # #  [1 1 1 1 1 1]
+    # #  [0 1 1 1 1 1]
+    # #  [0 1 0 1 0 1]]
 
+    split = -2
+
+    bitty = Bitty.stack_bit(test)
+    group_indices = [(bitty.b[split] == b) for b in range(2)] # Or np.nonzero(bitty.b[split] == b)[0]
+    print(group_indices)
+    grop1 = bitty.i[group_indices[0]]
+    print(grop1)
+    new_bt1 = Bitty.stack_bit_arys(grop1[:split], grop1[split + 1:])
+    print(new_bt1)
+    grop2 = bitty.i[group_indices[1]]
+    print(grop2)
+    new_bt2 = Bitty.stack_bit_arys(grop2[:split], grop2[split + 1:])
+    print(new_bt2)
     empty = Bitty.empty((6, 6))
+    # AUSGABE
+    # [array([False,  True,  True, False, False,  True]), array([ True, False, False,  True,  True, False])]
+    # <class '__main__.SliceView'>, bit_length=6,
+    # [[0 1 0 1 0 1]
+    #  [1 1 0 1 0 1]
+    #  [0 1 0 1 0 1]]
+    # <class '__main__.BitFlagArray'>, bit_length=5,
+    # [[0 1 0 1 1]
+    #  [1 1 0 1 1]
+    #  [0 1 0 1 1]]
+    # <class '__main__.SliceView'>, bit_length=6,
+    # [[1 0 1 0 1 0]
+    #  [1 1 1 1 1 1]
+    #  [0 1 1 1 1 1]]
+    # <class '__main__.BitFlagArray'>, bit_length=5,
+    # [[1 0 1 0 0]
+    #  [1 1 1 1 1]
+    #  [0 1 1 1 1]]

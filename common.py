@@ -1,55 +1,50 @@
-from logging import raiseExceptions
-from typing import TypeVar
+from argparse import ArgumentError
+from typing import TypeVar, Generic, Type
 
 import numpy as np
 
-def get_type_for_scalar(value):
-    def raise_exception() -> np.dtype:
-        raise Exception("value to big")
-    return np.ubyte if value <= np.iinfo(np.uint8).max else \
-        np.uint16 if value <= np.iinfo(np.uint16).max else \
-            np.uint32 if value <= np.iinfo(np.uint32).max else \
-                np.uint64 if value <= np.iinfo(np.uint64).max else \
-                    raise_exception()
+T_ex = TypeVar('T_ex', bound=Exception)
+T_ret = TypeVar('T_ret')
 
 
-def get_type_for_array(ary):
-    return get_type_for_scalar(np.max(ary))
+#====================================================
+#               INLINE EXCEPTION UTIL
+#====================================================
 
-def get_type_for_bit_count(bit_count):
-    def raise_exception() -> np.dtype:
-        raise Exception("to many bits requested")
-    return np.ubyte if bit_count <= np.iinfo(np.uint8).bits else \
-        np.uint16 if  bit_count <= np.iinfo(np.uint16).bits else \
-            np.uint32 if bit_count <= np.iinfo(np.uint32).bits else \
-                np.uint64 if bit_count <= np.iinfo(np.uint64).bits else \
-                    raise_exception()
+class ExcRaiser(Generic[T_ret]):
+    def __init__(self, exception_cls: Type[T_ex], message: str):
+        self.exception_cls = exception_cls
+        self.message = message
+
+    def do_raise(self) -> T_ret:
+        raise self.exception_cls(self.message)
+
+#====================================================
+#                   TYPE DETECTION
+#====================================================
+
+exc_to_many_bit: ExcRaiser[type] = ExcRaiser(ArgumentError, "To many bits to fit.")
+_UINT_TYPES = (np.ubyte, np.uint16, np.uint32, np.uint64)
+
+def _get_type(value: int, attr: str):
+    for dtype in _UINT_TYPES:
+        if value <= getattr(np.iinfo(dtype), attr):
+            return dtype
+
+    return exc_to_many_bit.do_raise()
+
+
+def get_type_for_scalar(value: int):
+    return _get_type(value, "max")
+
+def get_type_for_bit_count(bit_count: int):
+    return _get_type(bit_count, "bits")
+
+def get_type_for_array(ary: np.ndarray):
+    return _get_type(np.max(ary), "max")
+
 
 def iter_bits(data):
     for byte in data:
         for i in range(8):
             yield (byte >> (7 - i)) & 1
-
-len_steps = [np.pow(2, x) + 2*x for x in range(15)]
-len_steps = np.array(len_steps, dtype=get_type_for_scalar(max(len_steps)))
-
-def get_len_step(value: np.unsignedinteger, steps: np.array[np.unsignedinteger]) -> tuple[np.unsignedinteger,np.unsignedinteger]:
-    last_step = 0
-    for i, cur_step in enumerate(steps):
-        if last_step < value <= cur_step:
-            return i, cur_step
-        last_step = cur_step
-    return -1, None
-
-def get_max_value(bit_count: int) -> np.unsignedinteger:
-    return  np.pow(2, bit_count) - 1
-
-def get_bit_count(value: np.unsignedinteger):
-    return int(np.ceil(np.log2(value+1)))
-
-# def get_bitmax(source: source, start: np.unsignedinteger = 0, to: np.unsignedinteger = -1, size: unsignedinteger = 32) -> int:
-#     bytes = np.full(fill_value=source, shape=size, dtype=np.ubyte)
-#     bytes[to : size] = 0
-#     bytes[0 : start] = 0
-#     return np.array([bytes[i] for i in range(size)])
-

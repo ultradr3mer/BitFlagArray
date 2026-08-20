@@ -1,9 +1,17 @@
-from typing import Iterable, Any
+from typing import Iterable, Any, List, Tuple, overload
 
 import numpy as np
+import numpy.typing as npt
 
-from modelCompression.common import get_bit_count
+from common import get_type_for_array, ExcRaiser
 
+
+def get_max_value(bit_count: int) -> np.unsignedinteger:
+    return np.pow(2, bit_count) - 1
+
+
+def get_bit_count(value: int | np.unsignedinteger):
+    return int(np.ceil(np.log2(value + 1)))
 
 def get_bitmask(length, start=0):
     return (np.power(2, length)-1)<<start
@@ -12,7 +20,7 @@ def get_bitmask(length, start=0):
     #     result |= 1 << i
     # return result
 
-def trim_leading_zero(bits: Iterable):
+def trim_leading_zero(bits: List | np.array):
     had_zero = 0
     for bit in bits:
         if bit == 0:
@@ -24,6 +32,28 @@ def trim_leading_zero(bits: Iterable):
         return bits[had_zero:]
     return bits
 
+
+# Overload 1: Wenn ein int reingeht, kommt (laut deinem Wunsch) ein int raus
+@overload
+def get_number(value: int, axis: object = 0) -> int:
+    bit_count = get_bit_count(value)
+    bit_range = np.arange(bit_count - 1, -1, -1)
+
+    return (value >> bit_range) & 1
+
+
+# Overload 2: Wenn ein Array reingeht, kommt ein Tuple raus
+@overload
+def get_number(value: npt.NDArray[np.unsignedinteger], axis: int = 0) -> Tuple[np.ndarray, int]:
+    bit_count = int(value.shape[axis])
+    bit_range = np.arange(bit_count - 1, -1, -1)
+
+    if axis != 0:
+        value.swapaxes(0, axis)
+    value = np.sum((value << bit_range), axis=1)
+    return value.astype(get_type_for_array(value)), bit_count
+
+
 def get_bits(value: np.ndarray | int | str, count = None):
     if isinstance(value, str):
         return [1 if c == '1' else 0 for c in value]
@@ -34,11 +64,30 @@ def get_bits(value: np.ndarray | int | str, count = None):
 
     if np.isscalar(value):
         return (value >> bit_range) & 1
-    else:
+    elif isinstance(value, np.ndarray):
         return (value.reshape((-1,1)) >> bit_range) & 1
+    else:
+        raise Exception("invalid Value")
 
 
-def get_number(bits):
+def get_number(value: npt.NDArray[np.unsignedinteger] | int, axis: object = 0) -> Tuple[np.ndarray,int] | int:
+    exc: ExcRaiser[int] = ExcRaiser(Exception, "Unsupported bit type.")
+
+    bit_count = (int(value.shape[axis]) if isinstance(value, np.ndarray)
+                 else get_bit_count(value) if isinstance(value, int) else exc.do_raise())
+    bit_range = np.arange(bit_count-1, -1, -1)
+
+    if np.isscalar(value):
+        return (value >> bit_range) & 1
+    elif isinstance(value, np.ndarray):
+        if axis != 0:
+            value.swapaxes(0, axis)
+        value = np.sum((value << bit_range), axis=1)
+        return value.astype(get_type_for_array(value)), bit_count
+    else:
+        raise Exception("invalid Value")
+
+def get_number_old(bits):
     return sum([2**i if b == 1 or b == '1' else 0 for i, b in enumerate(reversed(bits))])
 
 def flip_enc(value):
@@ -59,7 +108,7 @@ def trim_trailing_zero(p):
         zeros += 1
     return p if zeros == 0 else p[:-zeros]
 
-def symbol_to_str(sym: Iterable[Any] | np.ndarray[np.generic]) -> str:
+def symbol_to_str(sym: Iterable[Any] | npt.NDArray[np.unsignedinteger]) -> str:
     result = ''
     for s in sym:
         result += str(s)
@@ -84,7 +133,7 @@ def bits_to_hex(bits: str) -> str:
     )
 
 
-def hex_to_bits(hex_str: str, original_length: int = None) -> str:
+def hex_to_bits(hex_str: str, original_length: int | None = None) -> str:
     """Konvertiert einen Hexadezimalstring in einen Binärstring."""
     if not hex_str:
         return ""
