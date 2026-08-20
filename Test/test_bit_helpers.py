@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from BitFlagArray import (
-    NBitAryTpl,
+    NBitAryOnly,
     limit_to_bit_count, select_bits, arrange_bits, put_bits,
     merge_slices, normalize_key, get_slice_item_count,
     slice_union, slice_intersection,
@@ -100,7 +100,7 @@ def test_merge_slices_array_global_array_local():
 
 
 def test_select_bits_slice_high_bits():
-    data = NBitAryTpl(np.array([0b101010, 0b010101], dtype=np.uint8), 6)
+    data = NBitAryOnly(np.array([0b101010, 0b010101], dtype=np.uint8), 6)
     sel = select_bits(data, slice(1, 4))
     assert sel.get_bit_count() == 3
     np.testing.assert_array_equal(
@@ -111,33 +111,33 @@ def test_select_bits_slice_high_bits():
 
 
 def test_select_bits_list_picks_msb_positions():
-    data = NBitAryTpl(np.array([0b101010], dtype=np.uint8), 6)
+    data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
     sel = select_bits(data, [0, 2, 4])
     assert sel.get_bit_count() == 3
     np.testing.assert_array_equal(sel.get_bitwise(), np.array([[1, 1, 1]]))
 
 
 def test_select_bits_list_all_zero_positions():
-    data = NBitAryTpl(np.array([0b101010], dtype=np.uint8), 6)
+    data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
     sel = select_bits(data, [1, 3, 5])
     assert sel.get_bit_count() == 3
     np.testing.assert_array_equal(sel.get_bitwise(), np.array([[0, 0, 0]]))
 
 
 def test_select_bits_list_out_of_range_raises():
-    data = NBitAryTpl(np.array([0b101010], dtype=np.uint8), 6)
+    data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
     with pytest.raises(ValueError):
         select_bits(data, [0, 7])
 
 
 def test_select_bits_unsupported_key_type():
-    data = NBitAryTpl(np.array([0b101010], dtype=np.uint8), 6)
+    data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
     with pytest.raises(NotImplementedError):
         select_bits(data, 1.5)
 
 
 def test_arrange_bits_inverts_put_bits():
-    data = NBitAryTpl(np.array([0b101010], dtype=np.uint8), 6)
+    data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
     indices = [0, 2, 4]
     arranged = arrange_bits(data, indices)
     back = put_bits(arranged, np.array(indices), 6)

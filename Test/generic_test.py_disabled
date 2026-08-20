@@ -1,0 +1,17 @@
+T_ary = TypeVar('T_ary', bound=npt.NDArray)
+
+class NBitArray(NamedTuple, Generic[T_ary]):
+    array: T_ary
+    bit_count: int
+
+    @property
+    def dtype(self):
+        return Type[T_ary]
+
+
+T_sc = TypeVar('T_sc', bound=np.generic)
+
+
+class NBitScalar(NamedTuple, Generic[T_sc]):
+    value: T_sc
+    bit_count: int

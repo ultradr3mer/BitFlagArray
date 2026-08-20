@@ -99,13 +99,13 @@ def merge_slices(global_slice: sliceTypes, local_slice: sliceTypes) -> sliceType
     raise NotImplementedError("Slice not supported.")
 
 
-def limit_to_bit_count(value: np.ndarray, bit_count: int | slice, check_overflow=False) -> NBitAryTpl:
+def limit_to_bit_count(value: np.ndarray, bit_count: int | slice, check_overflow=False) -> NBitAryOnly:
     if isinstance(bit_count, slice):
         bit_count = bit_count.stop - bit_count.start
     new_val = value & get_bitmask(bit_count)
     if check_overflow and not (new_val == value).all():
         raise Exception("Value to large for target bits!")
-    return NBitAryTpl(new_val,bit_count)
+    return NBitAryOnly(new_val, bit_count)
 
 
 def revert_bit_slice(bit_slice: sliceTypes, value: npt.NDArray[np.unsignedinteger], original_bit_count: int) -> \
@@ -120,11 +120,11 @@ def revert_bit_slice(bit_slice: sliceTypes, value: npt.NDArray[np.unsignedintege
     raise NotImplementedError("Slice not supported.")
 
 
-def select_bits(data: NBitAryTpl, key: sliceTypes) -> NBitAryTpl :
+def select_bits(data: NBitAryOnly, key: sliceTypes) -> NBitAryOnly :
     if isinstance(key, Iterable):
         if not all(0 <= x <= data.get_bit_count() for x in key):
             raise ValueError(f"All indices must be between 0 and {data.get_bit_count()}.")
-        return NBitAryTpl(arrange_bits(data, key), len(key))
+        return NBitAryOnly(arrange_bits(data, key), len(key))
 
     elif isinstance(key, slice):
         start, stop, step = key.indices(data.get_bit_count())
@@ -182,7 +182,7 @@ class NBitArray(ABC):
         """View for bitwise selection."""
 
 @dataclass
-class NBitAryTpl(NBitArray):
+class NBitAryOnly(NBitArray):
     array: np.ndarray
     bit_count: int
 
@@ -256,11 +256,11 @@ class BitFlagArray(NBitArray):
     @classmethod
     def stack_n_bits(cls, *arrays: np.ndarray, bit_count: int | List[int] | None = None):
         if bit_count is None:
-            ary = [NBitAryTpl(a, np.iinfo(a).bits) for a in arrays]
+            ary = [NBitAryOnly(a, np.iinfo(a).bits) for a in arrays]
         elif isinstance(bit_count, List):
-            ary = [NBitAryTpl(a, count) for a, count in zip(arrays, bit_count)]
+            ary = [NBitAryOnly(a, count) for a, count in zip(arrays, bit_count)]
         elif isinstance(bit_count, int):
-            ary = [NBitAryTpl(a, bit_count) for a in arrays]
+            ary = [NBitAryOnly(a, bit_count) for a in arrays]
         else:
             raise TypeError("Unsupported type for bit_count")
 
@@ -269,7 +269,7 @@ class BitFlagArray(NBitArray):
     @classmethod
     def stack_bit(cls, ary: np.ndarray, axis=1):
         tpl: Tuple[np.ndarray,int] = get_number(ary, axis)
-        return BitFlagArray(NBitAryTpl(*tpl))
+        return BitFlagArray(NBitAryOnly(*tpl))
 
 
     @staticmethod
@@ -332,7 +332,7 @@ class SliceView(NBitArray):
 
     def read(self):
         items = self.data.get_array()[self.item_slice]
-        return select_bits(NBitAryTpl(items, self.data.get_bit_count()), self.bit_slice)
+        return select_bits(NBitAryOnly(items, self.data.get_bit_count()), self.bit_slice)
 
     def write(self, value):
         reverted = revert_bit_slice(self.bit_slice, value, self.data.get_bit_count())

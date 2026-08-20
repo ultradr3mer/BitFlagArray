@@ -1,9 +1,11 @@
+from dataclasses import dataclass
+
 import numpy as np
 import pytest
 
 from commonEncoding import (
     get_bitmask, get_bit_count, get_number, get_bits,
-    get_number_old, bits_to_hex, hex_to_bits,
+    bits_to_hex, hex_to_bits,
 )
 
 
@@ -24,60 +26,62 @@ def test_get_bit_count():
 
 
 def test_get_number_axis_0(bit_data):
-    values, bc = get_number(bit_data, axis=0)
-    assert bc == 6
+    n_bit_ary = get_number(bit_data, axis=0)
+    assert n_bit_ary.bit_count == 6
     np.testing.assert_array_equal(
-        values,
+        n_bit_ary.array,
         np.array([0b101100, 0b011111, 0b100110, 0b011111, 0b100110, 0b011111],
                  dtype=values.dtype),
     )
 
 
 def test_get_number_axis_1(bit_data):
-    values, bc = get_number(bit_data, axis=1)
-    assert bc == 6
+    n_bit_ary = get_number(bit_data, axis=1)
+    assert n_bit_ary.bit_count == 6
     np.testing.assert_array_equal(
-        values,
+        n_bit_ary.array,
         np.array([0b101010, 0b010101, 0b110101, 0b111111, 0b011111, 0b010101],
-                 dtype=values.dtype),
+                 dtype=n_bit_ary.dtype),
     )
 
 def test_get_number_zero_list(bit_data):
-    value = get_number([0]) #[c[0] for c in [(0, 0)]]))
+    n_bit_sc = get_number([0]) #[c[0] for c in [(0, 0)]]))
+    assert n_bit_sc.bit_count == 1
     np.testing.assert_array_equal(
-        value,
+        n_bit_sc.value,
         np.array([0]))
 
 def test_get_number_3_list(bit_data):
-    value = get_number([1, 1])  # [c[0] for c in [(0, 0)]]))
+    n_bit_sc = get_number([1, 1])
+    assert n_bit_sc.bit_count == 2
     np.testing.assert_array_equal(
-        value,
+        n_bit_sc.value,
         np.array([3]))
 
-def test_get_number_long_axis_0(long_data):
-    values, bc = get_number(long_data, axis=0)
-    assert bc == 6
-    assert len(values) == long_data.shape[1]
-    expected = [get_number_old(long_data[:, j].tolist()) for j in range(long_data.shape[1])]
+def test_get_number_long_axis_0(long_data, long_numbers_axis0):
+    n_bit_ary = get_number(long_data, axis=0)
+    assert n_bit_ary.bit_count == 6
+    assert len(n_bit_ary.array) == long_data.shape[1]
+    expected = long_numbers_axis0
     np.testing.assert_array_equal(
-        values,
-        np.array(expected, dtype=values.dtype),
+        n_bit_ary.array,
+        np.array(expected, dtype=n_bit_ary.dtype),
     )
 
 
 def test_get_number_long_axis_1(long_data):
-    values, bc = get_number(long_data, axis=1)
-    assert bc == 16
-    assert len(values) == long_data.shape[0]
+    n_bit_ary = get_number(long_data, axis=1)
+    assert n_bit_ary.bit_count == 16
+    assert len(n_bit_ary.array) == long_data.shape[0]
     expected = [get_number_old(row.tolist()) for row in long_data]
     np.testing.assert_array_equal(
-        values,
-        np.array(expected, dtype=values.dtype),
+        n_bit_ary.array,
+        np.array(expected, dtype=n_bit_ary.array.dtype),
     )
 
 
 def test_get_number_int():
-    bits = get_number(0b1010)
+    bits = get_number([1, 0, 1, 0])
     np.testing.assert_array_equal(bits, np.array([1, 0, 1, 0]))
 
 
