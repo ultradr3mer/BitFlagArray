@@ -32,6 +32,15 @@ def test_get_number_2d(bit_data):
                  dtype=values.dtype),
     )
 
+def test_get_number_2d(long_data):
+    values, bc = get_number(long_data, axis=5)
+    assert bc == 5
+
+
+def test_get_number_2d(long_data):
+    values, bc = get_number(long_data, axis=1)
+    assert bc == 16
+
 
 def test_get_number_int():
     bits = get_number(0b1010)

@@ -70,7 +70,7 @@ def get_bits(value: np.ndarray | int | str, count = None):
         raise Exception("invalid Value")
 
 
-def get_number(value: npt.NDArray[np.unsignedinteger] | int, axis: object = 0) -> Tuple[np.ndarray,int] | int:
+def get_number(value: npt.NDArray[np.unsignedinteger] | int, axis: int = 0) -> Tuple[np.ndarray,int] | int:
     exc: ExcRaiser[int] = ExcRaiser(Exception, "Unsupported bit type.")
 
     bit_count = (int(value.shape[axis]) if isinstance(value, np.ndarray)

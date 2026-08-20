@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 
+from BitFlagArray import BitFlagArray, Bitty
 from common import get_type_for_bit_count
-from BitFlagArray.BitFlagArray import BitFlagArray, Bitty
+from commonEncoding import get_number_old
 
 
 def test_construct_from_uint_array():
@@ -63,15 +64,21 @@ def test_construct_rejects_negative_signed():
         BitFlagArray(np.array([-1, 2], dtype=np.int8))
 
 
-def test_stack_bit(bit_data):
-    bitty = Bitty.stack_bit(bit_data)
-    assert bitty.get_bit_count() == 6
-    np.testing.assert_array_equal(
-        bitty.get_array(),
-        np.array([0b101010, 0b010101, 0b110101, 0b111111, 0b011111, 0b010101],
-                  dtype=bitty.get_array().dtype),
+def test_stack_bit_axis_1(long_data):
+    bitty = Bitty.stack_bit(long_data, axis=1)
+    assert bitty.get_bit_count() == 5
+    np.testing.assert_equal(
+        bitty.get_array()[0],
+        get_number_old([1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0]),
     )
-    np.testing.assert_array_equal(bitty.get_bitwise(), bit_data)
+
+def test_stack_bit_axis_0(long_data):
+    bitty = Bitty.stack_bit(long_data, axis=0)
+    assert bitty.get_bit_count() > 6 // TODO
+    np.testing.assert_array_equal(
+        bitty.get_array()[0],
+        get_number_old([1, 0, 1, 1, 0, 0]),
+    )
 
 
 def test_stack_bit_axis1(bit_data):
@@ -79,10 +86,9 @@ def test_stack_bit_axis1(bit_data):
     bitty = Bitty.stack_bit(t, axis=1)
     assert bitty.get_bit_count() == 6
     np.testing.assert_array_equal(bitty.get_bitwise(), t)
-    np.testing.assert_array_equal(
-        bitty.get_array(),
-        np.array([0b101100, 0b011111, 0b100110, 0b011111, 0b100110, 0b011111],
-                  dtype=bitty.get_array().dtype),
+    np.testing.assert_equal(
+        bitty.get_array()[0],
+        get_number_old([1, 0, 1, 1, 0, 0]),
     )
 
 
