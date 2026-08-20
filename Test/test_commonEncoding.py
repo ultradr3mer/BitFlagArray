@@ -31,7 +31,7 @@ def test_get_number_axis_0(bit_data):
     np.testing.assert_array_equal(
         n_bit_ary.array,
         np.array([0b101100, 0b011111, 0b100110, 0b011111, 0b100110, 0b011111],
-                 dtype=values.dtype),
+                 dtype=n_bit_ary.dtype),
     )
 
 
@@ -69,20 +69,20 @@ def test_get_number_long_axis_0(long_data, long_numbers_axis0):
     )
 
 
-def test_get_number_long_axis_1(long_data):
+def test_get_number_long_axis_1(long_data, long_numbers_axis1):
     n_bit_ary = get_number(long_data, axis=1)
     assert n_bit_ary.bit_count == 16
     assert len(n_bit_ary.array) == long_data.shape[0]
-    expected = [get_number_old(row.tolist()) for row in long_data]
     np.testing.assert_array_equal(
         n_bit_ary.array,
-        np.array(expected, dtype=n_bit_ary.array.dtype),
+        np.array(long_numbers_axis1, dtype=n_bit_ary.array.dtype),
     )
 
 
-def test_get_number_int():
-    bits = get_number([1, 0, 1, 0])
-    np.testing.assert_array_equal(bits, np.array([1, 0, 1, 0]))
+def test_get_number_1d_list():
+    n_bit_sc = get_number([1, 0, 1, 0])
+    assert n_bit_sc.bit_count == 4
+    assert n_bit_sc.value == 0b1010
 
 
 def test_get_bits_ndarray():
