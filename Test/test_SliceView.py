@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from commonEncoding import get_bitmask
-from BitFlagArray.BitFlagArray import Bitty
+from BitFlagArray import Bitty
 
 
 def test_b_forces_bit_slice_next(bit_data):

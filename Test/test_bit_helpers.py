@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from BitFlagArray.BitFlagArray import (
+from BitFlagArray import (
     NBitAryTpl,
     limit_to_bit_count, select_bits, arrange_bits, put_bits,
     merge_slices, normalize_key, get_slice_item_count,

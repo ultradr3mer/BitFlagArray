@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from BitFlagArray.BitFlagArray import Bitty
+from BitFlagArray import Bitty
 
 
 def test_basic(bit_data):

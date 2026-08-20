@@ -80,10 +80,11 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | int, axis: int = 0) -> T
     if np.isscalar(value):
         return (value >> bit_range) & 1
     elif isinstance(value, np.ndarray):
-        if axis != 0:
-            value.swapaxes(0, axis)
-        value = np.sum((value << bit_range), axis=1)
-        return value.astype(get_type_for_array(value)), bit_count
+        broadcast_shape = [1] * value.ndim
+        broadcast_shape[axis] = bit_count
+        shifted = value << bit_range.reshape(broadcast_shape)
+        combined = np.sum(shifted, axis=axis)
+        return combined.astype(get_type_for_array(combined)), bit_count
     else:
         raise Exception("invalid Value")
 

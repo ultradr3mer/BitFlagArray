@@ -267,7 +267,7 @@ class BitFlagArray(NBitArray):
         return cls.stack_bit_arys(*ary)
 
     @classmethod
-    def stack_bit(cls, ary: np.ndarray, axis=0):
+    def stack_bit(cls, ary: np.ndarray, axis=1):
         tpl: Tuple[np.ndarray,int] = get_number(ary, axis)
         return BitFlagArray(NBitAryTpl(*tpl))
 

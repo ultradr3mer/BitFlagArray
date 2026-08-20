@@ -66,19 +66,22 @@ def test_construct_rejects_negative_signed():
 
 def test_stack_bit_axis_1(long_data):
     bitty = Bitty.stack_bit(long_data, axis=1)
-    assert bitty.get_bit_count() == 5
-    np.testing.assert_equal(
-        bitty.get_array()[0],
-        get_number_old([1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0]),
+    assert bitty.get_bit_count() == 16
+    expected = np.array(
+        [get_number_old(row.tolist()) for row in long_data],
+        dtype=bitty.get_array().dtype,
     )
+    np.testing.assert_array_equal(bitty.get_array(), expected)
+
 
 def test_stack_bit_axis_0(long_data):
     bitty = Bitty.stack_bit(long_data, axis=0)
-    assert bitty.get_bit_count() > 6 // TODO
-    np.testing.assert_array_equal(
-        bitty.get_array()[0],
-        get_number_old([1, 0, 1, 1, 0, 0]),
+    assert bitty.get_bit_count() == 6
+    expected = np.array(
+        [get_number_old(long_data[:, j].tolist()) for j in range(long_data.shape[1])],
+        dtype=bitty.get_array().dtype,
     )
+    np.testing.assert_array_equal(bitty.get_array(), expected)
 
 
 def test_stack_bit_axis1(bit_data):
