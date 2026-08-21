@@ -3,7 +3,7 @@
 ## =====================
 
 Ansicht mit Indices horizontal/vertikal
-  a  b  c  d  e  f 
+  a  b  c  d  e f 
 ⌟⌞↧⌟⌞⥝⌟⌞⥝⌟⌞↧⌟⌞⥝⌟⌞⥝⌟⌞
 [ᵃ₄ ᵇ₅ ᶜ₆ ᵈ₇ ᵉ₈ ᵉ₈]↤3
 [ ᵃ₄ ᵇ₅ ᶠ₆ ᵍ₇ ʰ₈ʰ₈]↤4

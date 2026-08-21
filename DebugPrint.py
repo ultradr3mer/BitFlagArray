@@ -31,6 +31,10 @@ def _circled_number(bit_idx: int, set: bool) -> str:
     return '●' if set else '○'
 
 
+def _bit_letter(idx: int) -> str:
+    return chr(ord('a') + idx) if idx < 26 else str(idx)
+
+
 def slice_debug(view: SliceView, mode: str = "1/0") -> str:
     def get_indices(key, length: int) -> List[int]:
         if isinstance(key, slice):
@@ -48,7 +52,7 @@ def slice_debug(view: SliceView, mode: str = "1/0") -> str:
         bit_idx = bit_indices[col]
         item_idx = item_indices[row]
         if mode == "1/0":
-            return str(val)
+            return f"{_bit_letter(bit_idx)}{val}"
         elif mode == "sub":
             return _superscript_letter(bit_idx) + _subscript_number(item_idx)
         elif mode == "circ":
@@ -63,51 +67,35 @@ def slice_debug(view: SliceView, mode: str = "1/0") -> str:
     for r in range(n_items):
         for c in range(n_bits):
             max_cell = max(max_cell, len(cell_str(r, c)))
-    max_bit_label = max((len(str(b)) for b in bit_indices), default=1)
-    cell_w = max(max_cell, max_bit_label) + 2
 
-    max_item_label = max((len(str(i)) for i in item_indices), default=0)
-    label_w = max(max_item_label, 0) + 1
+    body_lines = []
+    for row_i, item_idx in enumerate(item_indices):
+        if n_bits > 0:
+            cells = " ".join(cell_str(row_i, c).ljust(max_cell) for c in range(n_bits))
+        else:
+            cells = ""
+        body_lines.append(f"[{cells}]↤{item_idx}")
 
-    def pad(s: str) -> str:
-        return s.center(cell_w)
-
-    total_w = label_w + 1 + cell_w * n_bits
-    lines = []
+    inner_w = max_cell * n_bits + max(n_bits - 1, 0) if n_bits > 0 else 0
+    content_w = inner_w + 2
 
     if n_bits == 0:
-        lines.append(' ' * label_w + '├' + '─' * (cell_w * n_bits) + '┤')
+        header = ""
+        sep = "⌟⌞"
     elif is_bit_slice:
-        start_b = bit_indices[0]
-        end_b = bit_indices[-1]
-        inner_w = cell_w * n_bits
-        if start_b == end_b:
-            core = str(start_b)
-        else:
-            core = f"{start_b}─ slice ─{end_b}"
-        if len(core) > inner_w:
-            core = f"{start_b}─{end_b}"
-        top_label = core.center(inner_w, '─') if len(core) < inner_w else core[:inner_w]
-        lines.append(' ' * label_w + '├' + top_label + '┤')
+        start_l = _bit_letter(bit_indices[0])
+        end_l = _bit_letter(bit_indices[-1]) if n_bits > 1 else start_l
+        header = f"[{start_l}⇿{end_l}]"
+        sep = f"⌟⊩ ⭠{' ' * (content_w - 6)}⭢ ⫣⌞" if content_w > 6 else f"⌟⊩⭠⭢⫣⌞"
     else:
-        header = ' ' * label_w + '│'
-        for b in bit_indices:
-            header += pad(str(b))
-        header += '│'
-        lines.append(header)
+        parts = " ".join(_bit_letter(b).ljust(max_cell) for b in bit_indices)
+        header = " " + parts + " "
+        markers = []
+        for i in range(n_bits):
+            markers.append("↧" if i == 0 or i == n_bits - 1 else "⥝")
+        sep = "⌟⌞" + "⌟⌞".join(markers) + "⌟⌞"
 
-        sep = ' ' * label_w + '├'
-        for _ in range(n_bits):
-            half = cell_w // 2
-            sep += '─' * half + '┴' + '─' * (cell_w - half - 1)
-        sep += '┤'
-        lines.append(sep)
+    bottom = "⌝" + " " * (content_w + 2) + "⌜"
 
-    for row_i, item_idx in enumerate(item_indices):
-        row = str(item_idx).rjust(label_w) + '│'
-        for col_j in range(n_bits):
-            row += pad(cell_str(row_i, col_j))
-        row += '│'
-        lines.append(row)
-
-    return '\n'.join(lines)
+    lines = [header, sep] + body_lines + [bottom]
+    return "\n".join(lines)
