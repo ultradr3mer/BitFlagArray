@@ -127,7 +127,7 @@ def _circled_number(bit_idx: int, set: bool) -> str:
     return '●' if set else '○'
 
 
-def slice_debug(view: SliceView, mode: str = "1/0") -> str:
+def print_debug(view: SliceView, mode: str = "1/0") -> str:
     def get_indices(key, length: int) -> List[int]:
         if isinstance(key, slice):
             start, stop, step = key.indices(length)
