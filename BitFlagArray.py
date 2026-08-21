@@ -243,11 +243,12 @@ class BitFlagArray(NBitArray):
             raise ValueError(f"Array muss die Size des ersten ({item_count}) haben.")
         bit_count = np.sum([a.get_bit_count() for a in arrays], dtype=int)
 
-        array = np.zeros(shape=item_count, dtype=get_type_for_bit_count(bit_count))
+        fitting_type = get_type_for_bit_count(bit_count)
+        array = np.zeros(shape=item_count, dtype=fitting_type)
 
         bitshift = 0
         for item in reversed(arrays):
-            shifted = item.get_array() << bitshift
+            shifted = np.array(item.get_array(), dtype=fitting_type) << bitshift
             array = array | shifted
             bitshift += item.get_bit_count()
 
