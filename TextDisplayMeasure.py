@@ -38,7 +38,7 @@ class Settings(NamedTuple):
     BG_COLOR = "black"
     TEXT_COLOR = "white"
 
-class TextDisplayWith:
+class TextDisplayMeasure:
     settings = Settings()
 
     text = "This is centered text"
