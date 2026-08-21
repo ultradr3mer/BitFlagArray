@@ -76,34 +76,38 @@ def slice_debug(view: SliceView, mode: str = "1/0") -> str:
     lines = []
 
     if n_bits == 0:
-        lines.append(' ' * label_w + '┠' + '┄' * (cell_w * n_bits) + '┫')
+        lines.append(' ' * label_w + '├' + '─' * (cell_w * n_bits) + '┤')
     elif is_bit_slice:
         start_b = bit_indices[0]
         end_b = bit_indices[-1]
-        top_label = f"{start_b}┉ ┄┄┄┄┄slice┄┄┄┄┄ ┉{end_b}"
         inner_w = cell_w * n_bits
-        if len(top_label) < inner_w:
-            top_label = top_label.center(inner_w)
-        lines.append(' ' * label_w + '┠' + top_label + '┫')
+        if start_b == end_b:
+            core = str(start_b)
+        else:
+            core = f"{start_b}─ slice ─{end_b}"
+        if len(core) > inner_w:
+            core = f"{start_b}─{end_b}"
+        top_label = core.center(inner_w, '─') if len(core) < inner_w else core[:inner_w]
+        lines.append(' ' * label_w + '├' + top_label + '┤')
     else:
-        header = ' ' * label_w + '┆'
+        header = ' ' * label_w + '│'
         for b in bit_indices:
             header += pad(str(b))
-        header += '┆'
+        header += '│'
         lines.append(header)
 
-        sep = ' ' * label_w + '┠'
+        sep = ' ' * label_w + '├'
         for _ in range(n_bits):
             half = cell_w // 2
-            sep += '┄' * half + '┷' + '┄' * (cell_w - half - 1)
-        sep += '┫'
+            sep += '─' * half + '┴' + '─' * (cell_w - half - 1)
+        sep += '┤'
         lines.append(sep)
 
     for row_i, item_idx in enumerate(item_indices):
-        row = str(item_idx).rjust(label_w) + '╡'
+        row = str(item_idx).rjust(label_w) + '│'
         for col_j in range(n_bits):
             row += pad(cell_str(row_i, col_j))
-        row += '┆'
+        row += '│'
         lines.append(row)
 
     return '\n'.join(lines)
