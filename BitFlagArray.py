@@ -4,6 +4,7 @@ from typing import List, Iterable, Tuple
 
 import numpy as np
 import numpy.typing as npt
+from pyparsing import Dict
 
 from common import get_type_for_bit_count, get_type_for_scalar
 from commonEncoding import get_bitmask, get_number, get_bits
@@ -366,7 +367,7 @@ class SliceView(NBitArray):
         key = invert_key(key, self.get_item_count())
         return self.copy(item_slice=merge_slices(self.item_slice, key))
 
-    def group_by_bit(self, key):
+    def group_by_bit(self, key) -> Dict[int, SliceView]:
         slice_max = self.get_bit_count()
         key = normalize_key(key, slice_max)
         all_key_vals = np.unique(self.b[key])

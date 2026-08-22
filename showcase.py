@@ -1,6 +1,7 @@
 import numpy as np
 
 from BitFlagArray import Bitty
+from DebugPrint import print_debug
 from TextDisplayMeasure import TextDisplayMeasure
 
 test = np.array([[1, 0, 1, 0, 1, 0],

@@ -117,3 +117,18 @@ def test_group_by_2(bit_data):
     groups = bitty.group_by_bit(g_idx)
     np.testing.assert_array_equal(groups[1], bitty.i[[0,3,4]][[0,1,3,4,5]])
     np.testing.assert_array_equal(groups[0], bitty.i[[1,2,5]][[0,1,3,4,5]])
+
+def test_group_by_3(bit_data):
+    bitty = Bitty.stack_bit(bit_data)
+    g_idx = 3
+    groups = bitty.group_by_bit(g_idx)
+    np.testing.assert_array_equal(groups[1], bitty.i[[1,2,3,4,5]][[0,1,2,4,5]])
+    np.testing.assert_array_equal(groups[0], bitty.i[[0]][[0,1,2,4,5]])
+
+def test_group_by_23(bit_data):
+    bitty = Bitty.stack_bit(bit_data)
+    g_idx = [2,3]
+    groups = bitty.group_by_bit(g_idx)
+    np.testing.assert_array_equal(groups[1], bitty.i[[1,2,5]][[0,1,4,5]])
+    np.testing.assert_array_equal(groups[2], bitty.i[[0]][[0,1,4,5]])
+    np.testing.assert_array_equal(groups[3], bitty.i[[3, 4]][[0,1,4,5]])
