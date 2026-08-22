@@ -1,13 +1,14 @@
 from enum import StrEnum
+from idlelib.debugger_r import FrameProxy
 from itertools import permutations
 from pathlib import Path
-from typing import NamedTuple, List, Iterable, Tuple, Set
+from typing import NamedTuple, List, Iterable, Tuple, Set, FrozenSet, Dict
 
 import numpy as np
 import numpy.typing as npt
 
 from BitFlagArray import Bitty, NBitArray
-from commonEncoding import CommonNBitSc, CommonNBitAry, get_bits
+from commonEncoding import get_bits
 
 base = Path("bins")
 
@@ -50,9 +51,12 @@ class PermutationGen:
               yield IndexedBit.from_multiple(perm, val)
 
 def get_consequent(data: NBitArray,
-                   antecedent: Set[IndexedBit]
-                   associations: Any) -> List[Association]:
-    undefined_data = data.b[item.undefined_indices].get_bitwise()
+                   antecedent: FrozenSet[IndexedBit],
+                   associations: Dict[FrozenSet[IndexedBit],IndexedBit]) -> List[Association]:
+    # From antecendent => getassociatons => determine undefined_indices
+    defined = associations[antecedent]
+    undefined_indices = [i for i in range(data.get_bit_count()) if i not in defined or antecedent]
+    undefined_data = data.b[undefined_indices].get_bitwise()
     mean = np.mean(undefined_data, axis=0)
     association_rules = []
     still_undefined: set[int] = set()
