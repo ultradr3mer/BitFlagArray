@@ -93,10 +93,22 @@ def candidate_consequent_indices(
     return set(range(bit_count)) - antecedent_indices - known_indices
 
 
+def antecedent_value(antecedent: FrozenSet[IndexedBit]) -> Tuple[List[int], int]:
+    """Liefert die sortierten Indizes und den gepackten Zahlenwert einer
+    Antezedenz, passend zu `data.b[indices].get_array()`."""
+    bit_map = {bit.index: bit.value for bit in antecedent}
+    indices = sorted(bit_map)
+    packed = sum(
+        bit_map[idx] << (len(indices) - 1 - pos)
+        for pos, idx in enumerate(indices)
+    )
+    return indices, packed
+
+
 class CombinationGen:
-    """Erzeugt alle in `bits` tatsaechlich vorkommenden Antezedenzen
-    fuer eine gegebene Kombinationsgroesse (Indizes sind ungeordnet,
-    daher Kombinationen statt Permutationen)."""
+    """Erzeugt alle in `data` tatsaechlich vorkommenden Antezedenzen
+    fuer eine gegebene Kombinationsgroesse. Arbeitet auf den gepackten
+    Zahlenwerten von `SliceView`, ohne die Bits zu expandieren."""
 
     def __init__(self, item_count: int):
         self.items = range(item_count)
@@ -104,37 +116,28 @@ class CombinationGen:
     def gen(
         self,
         draw_count: int,
-        bits: npt.NDArray[np.integer],
+        data: Bitty,
     ) -> Iterable[FrozenSet[IndexedBit]]:
         if draw_count == 0:
             yield frozenset()
             return
 
         for comb in combinations(self.items, draw_count):
-            sub = bits[:, list(comb)]
-            for row in np.unique(sub, axis=0):
-                yield IndexedBit.from_multiple(comb, tuple(int(v) for v in row))
-
-
-def _matching_mask(
-    bits: npt.NDArray[np.integer],
-    antecedent: FrozenSet[IndexedBit],
-) -> npt.NDArray[np.bool_]:
-    mask = np.ones(bits.shape[0], dtype=bool)
-    for bit in antecedent:
-        mask &= bits[:, bit.index] == bit.value
-    return mask
+            comb_list = list(comb)
+            packed_values = data.b[comb_list].get_array()
+            for val in np.unique(packed_values):
+                yield IndexedBit.from_multiple(comb_list, int(val))
 
 
 def find_consequents(
-    bits: npt.NDArray[np.integer],
+    data: Bitty,
     antecedent: FrozenSet[IndexedBit],
     known_indices: Set[int],
     rules_by_consequent: Dict[int, List[Association]],
 ) -> List[Association]:
     """Bestimmt alle durch `antecedent` festlegbaren Bits, deren Index
     noch nicht bekannt ist, und traegt sie (nicht-redundant) ein."""
-    bit_count = bits.shape[1]
+    bit_count = data.get_bit_count()
     candidates = (
         set(range(bit_count))
         - {bit.index for bit in antecedent}
@@ -143,14 +146,19 @@ def find_consequents(
     if not candidates:
         return []
 
-    mask = _matching_mask(bits, antecedent)
-    if not mask.any():
-        return []
+    if antecedent:
+        indices, packed = antecedent_value(antecedent)
+        mask = data.b[indices].get_array() == packed
+        if not mask.any():
+            return []
+        matching = data.i[mask]
+    else:
+        matching = data
 
     new_rules: List[Association] = []
     for idx in candidates:
-        col = bits[mask, idx]
-        uniq = np.unique(col)
+        col_values = matching.b[[idx]].get_array()
+        uniq = np.unique(col_values)
         if len(uniq) == 1:
             rule = Association(antecedent, IndexedBit(idx, int(uniq[0])))
             if add_rule(rule, rules_by_consequent):
@@ -168,7 +176,6 @@ def find_association_rules(
     Indizes stoeren nicht weiter, da sie als Kandidaten ausgeschlossen
     werden.
     """
-    bits = data.get_bitwise()
     bit_count = data.get_bit_count()
 
     rules_by_consequent: Dict[int, List[Association]] = defaultdict(list)
@@ -176,8 +183,8 @@ def find_association_rules(
     gen = CombinationGen(bit_count)
 
     for level_idx in range(bit_count + 1):
-        for antecedent in gen.gen(draw_count=level_idx, bits=bits):
-            find_consequents(bits, antecedent, known_indices, rules_by_consequent)
+        for antecedent in gen.gen(draw_count=level_idx, data=data):
+            find_consequents(data, antecedent, known_indices, rules_by_consequent)
         known_indices = set(rules_by_consequent.keys())
 
     return rules_by_consequent
