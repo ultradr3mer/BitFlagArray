@@ -1,8 +1,8 @@
+from collections import defaultdict
 from enum import StrEnum
-from idlelib.debugger_r import FrameProxy
-from itertools import permutations
+from itertools import combinations
 from pathlib import Path
-from typing import NamedTuple, List, Iterable, Tuple, Set, FrozenSet, Dict
+from typing import NamedTuple, List, Tuple, Iterable, FrozenSet, Set, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -12,13 +12,12 @@ from commonEncoding import get_bits
 
 base = Path("bins")
 
-bits_to_take = 32
-num_possible = np.pow(2, bits_to_take)
 
 class IndexedBit(NamedTuple):
     class Fields(StrEnum):
         index = "index"
         value = "value"
+
     index: int
     value: int
 
@@ -26,70 +25,179 @@ class IndexedBit(NamedTuple):
         return f"{self.index}={self.value})"
 
     @classmethod
-    def from_multiple(cls,
-                      mult_indices : List[int] | Tuple[int,...] | npt.NDArray[np.unsignedinteger],
-                      mult_values : List[int] | Tuple[int,...] | npt.NDArray[np.unsignedinteger] | int) -> Set[IndexedBit]:
+    def from_multiple(
+        cls,
+        mult_indices: List[int] | Tuple[int, ...] | npt.NDArray[np.unsignedinteger],
+        mult_values: List[int] | Tuple[int, ...] | npt.NDArray[np.unsignedinteger] | int,
+    ) -> FrozenSet["IndexedBit"]:
         if isinstance(mult_values, int):
             mult_values = get_bits(mult_values, len(mult_indices))
-        gen = [IndexedBit(i,v) for i,v in zip(mult_indices, mult_values)]
-        return set(gen)
+        return frozenset(cls(i, int(v)) for i, v in zip(mult_indices, mult_values))
+
 
 class Association(NamedTuple):
-    antecedent: Set[IndexedBit]
+    antecedent: FrozenSet[IndexedBit]
     consequent: IndexedBit
 
-class PermutationGen:
-    def __init__(self, item_count: int = 32, variant_count: int = 2):
+
+def add_rule(
+    rule: Association,
+    rules_by_consequent: Dict[int, List[Association]],
+) -> bool:
+    """
+    Fuegt die Regel nur hinzu, wenn keine staerkere/bereits bekannte
+    Regel mit gleichem Ziel existiert.
+
+    {a=1} => c=1 ist bereits bekannt => {a=1, b=0} => c=1 ist redundant.
+
+    True:  Regel wurde hinzugefuegt
+    False: Regel war redundant
+    """
+    target = rule.consequent.index
+
+    if any(
+        old.antecedent <= rule.antecedent and old.consequent == rule.consequent
+        for old in rules_by_consequent.get(target, [])
+    ):
+        return False
+
+    rules_by_consequent.setdefault(target, []).append(rule)
+    return True
+
+
+def applicable_rules(
+    rules_by_consequent: Dict[int, List[Association]],
+    known: Set[IndexedBit] | FrozenSet[IndexedBit],
+) -> List[Association]:
+    """Regeln, deren Antezedenz komplett in `known` enthalten ist und
+    deren Zielindex noch nicht bestimmt ist."""
+    known_indices = {bit.index for bit in known}
+
+    return [
+        rule
+        for target_index, rules in rules_by_consequent.items()
+        if target_index not in known_indices
+        for rule in rules
+        if rule.antecedent <= known
+    ]
+
+
+def candidate_consequent_indices(
+    antecedent: FrozenSet[IndexedBit] | Set[IndexedBit],
+    known: Set[IndexedBit] | FrozenSet[IndexedBit],
+    bit_count: int,
+) -> Set[int]:
+    """Indizes, die weder in der Antezedenz noch bereits bestimmt sind."""
+    antecedent_indices = {bit.index for bit in antecedent}
+    known_indices = {bit.index for bit in known}
+    return set(range(bit_count)) - antecedent_indices - known_indices
+
+
+class CombinationGen:
+    """Erzeugt alle in `bits` tatsaechlich vorkommenden Antezedenzen
+    fuer eine gegebene Kombinationsgroesse (Indizes sind ungeordnet,
+    daher Kombinationen statt Permutationen)."""
+
+    def __init__(self, item_count: int):
         self.items = range(item_count)
-        self.variants = range(variant_count)
 
-    def gen(self, draw_count: int, data: NBitArray) -> Iterable[Set[IndexedBit]]:
+    def gen(
+        self,
+        draw_count: int,
+        bits: npt.NDArray[np.integer],
+    ) -> Iterable[FrozenSet[IndexedBit]]:
         if draw_count == 0:
+            yield frozenset()
             return
-        for perm in permutations(self.items, draw_count):
-            for val in np.unique(data.b[perm]):
-              yield IndexedBit.from_multiple(perm, val)
 
-def get_consequent(data: NBitArray,
-                   antecedent: FrozenSet[IndexedBit],
-                   associations: Dict[FrozenSet[IndexedBit],IndexedBit]) -> List[Association]:
-    # From antecendent => getassociatons => determine undefined_indices
-    defined = associations[antecedent]
-    undefined_indices = [i for i in range(data.get_bit_count()) if i not in defined or antecedent]
-    undefined_data = data.b[undefined_indices].get_bitwise()
-    mean = np.mean(undefined_data, axis=0)
-    association_rules = []
-    still_undefined: set[int] = set()
-    for index, bit in zip(item.undefined_indices, mean):
-        if bit == 1 or bit == 0:
-            association_rules.append(Association(item, IndexedBit(index, bit)))
-        else:
-            still_undefined.add(index)
-    return association_rules
+        for comb in combinations(self.items, draw_count):
+            sub = bits[:, list(comb)]
+            for row in np.unique(sub, axis=0):
+                yield IndexedBit.from_multiple(comb, tuple(int(v) for v in row))
 
-def find_association_rules(data: Bitty):
-    associations: List[Association] = []
-    perm_gen = PermutationGen()
 
-    for level_idx in range(data.get_bit_count()):
-        level_associations: List[Association] = []
-        antecedent_list = perm_gen.gen(draw_count=level_idx, data=data)
-        for possible_antecedent in antecedent_list:
-            c, undef = get_consequent(data, possible_antecedent, associations)
-            level_associations.extend(c)
+def _matching_mask(
+    bits: npt.NDArray[np.integer],
+    antecedent: FrozenSet[IndexedBit],
+) -> npt.NDArray[np.bool_]:
+    mask = np.ones(bits.shape[0], dtype=bool)
+    for bit in antecedent:
+        mask &= bits[:, bit.index] == bit.value
+    return mask
 
-        print("loop:", i, "associations:", f"\n".join([str(value) for value in level_associations]))
-        associations.extend(level_associations)
 
-    return associations
+def find_consequents(
+    bits: npt.NDArray[np.integer],
+    antecedent: FrozenSet[IndexedBit],
+    known_indices: Set[int],
+    rules_by_consequent: Dict[int, List[Association]],
+) -> List[Association]:
+    """Bestimmt alle durch `antecedent` festlegbaren Bits, deren Index
+    noch nicht bekannt ist, und traegt sie (nicht-redundant) ein."""
+    bit_count = bits.shape[1]
+    candidates = (
+        set(range(bit_count))
+        - {bit.index for bit in antecedent}
+        - known_indices
+    )
+    if not candidates:
+        return []
 
-for path in base.glob("model.layers.0.input_layernorm.weight.bin"):
-    with open(path, "rb") as f:
-        buffer = f.read()
-    name = path.name
+    mask = _matching_mask(bits, antecedent)
+    if not mask.any():
+        return []
 
-    x = np.frombuffer(buffer, dtype=np.uint32)
+    new_rules: List[Association] = []
+    for idx in candidates:
+        col = bits[mask, idx]
+        uniq = np.unique(col)
+        if len(uniq) == 1:
+            rule = Association(antecedent, IndexedBit(idx, int(uniq[0])))
+            if add_rule(rule, rules_by_consequent):
+                new_rules.append(rule)
+    return new_rules
 
-    values, counts = np.unique(x, return_counts=True)
 
-    find_association_rules(Bitty(values))
+def find_association_rules(
+    data: Bitty,
+) -> Dict[int, List[Association]]:
+    """
+    Level 0 (leere Antezedenz) sammelt einzeln fixierte Werte.
+    Jedes hoehere Level erzeugt Antezedenzen der Groesse `level_idx`
+    und leitet daraus weitere Konsequenten ab. Bereits bestimmte
+    Indizes stoeren nicht weiter, da sie als Kandidaten ausgeschlossen
+    werden.
+    """
+    bits = data.get_bitwise()
+    bit_count = data.get_bit_count()
+
+    rules_by_consequent: Dict[int, List[Association]] = defaultdict(list)
+    known_indices: Set[int] = set()
+    gen = CombinationGen(bit_count)
+
+    for level_idx in range(bit_count + 1):
+        for antecedent in gen.gen(draw_count=level_idx, bits=bits):
+            find_consequents(bits, antecedent, known_indices, rules_by_consequent)
+        known_indices = set(rules_by_consequent.keys())
+
+    return rules_by_consequent
+
+
+if __name__ == "__main__":
+    bits_to_take = 32
+    num_possible = np.pow(2, bits_to_take)
+
+    for path in base.glob("model.layers.0.input_layernorm.weight.bin"):
+        with open(path, "rb") as f:
+            buffer = f.read()
+        name = path.name
+
+        x = np.frombuffer(buffer, dtype=np.uint32)
+
+        values, counts = np.unique(x, return_counts=True)
+
+        rules = find_association_rules(Bitty(values))
+        for target, rule_list in rules.items():
+            print(f"target {target}:")
+            for rule in rule_list:
+                print(f"  {rule}")
