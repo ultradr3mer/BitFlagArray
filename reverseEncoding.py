@@ -7,8 +7,9 @@ from typing import NamedTuple, List, Tuple, Iterable, FrozenSet, Set, Dict
 import numpy as np
 import numpy.typing as npt
 
-from BitFlagArray import Bitty, NBitArray
-from commonEncoding import get_bits
+from BitFlagArray import Bitty, NBitArray, SliceView
+from common import AccessibleAry
+from commonEncoding import get_bits, get_number
 
 base = Path("bins")
 
@@ -21,9 +22,6 @@ class IndexedBit(NamedTuple):
     index: int
     value: int
 
-    def __repr__(self):
-        return f"{self.index}={self.value})"
-
     @classmethod
     def from_multiple(
         cls,
@@ -33,6 +31,22 @@ class IndexedBit(NamedTuple):
         if isinstance(mult_values, int):
             mult_values = get_bits(mult_values, len(mult_indices))
         return frozenset(cls(i, int(v)) for i, v in zip(mult_indices, mult_values))
+
+class AccIdxBit(AccessibleAry[IndexedBit]):
+    def __init__(self, inner: Iterable[IndexedBit] | List[IndexedBit]):
+        if not isinstance(inner, List):
+            inner = list(inner)
+        inner.sort(key=lambda bi: bi.index)
+        super().__init__(inner)
+
+    def __repr__(self):
+        return f"{self[IndexedBit.Fields.index]}={self[IndexedBit.Fields.value]})"
+
+    def select(self, data: NBitArray) -> SliceView:
+        mask = data.b[self[IndexedBit.Fields.index]] == get_number(self[IndexedBit.Fields.value])
+        return data[mask]
+
+
 
 
 class Association(NamedTuple):
@@ -93,22 +107,35 @@ def candidate_consequent_indices(
     return set(range(bit_count)) - antecedent_indices - known_indices
 
 
-def antecedent_value(antecedent: FrozenSet[IndexedBit]) -> Tuple[List[int], int]:
-    """Liefert die sortierten Indizes und den gepackten Zahlenwert einer
-    Antezedenz, passend zu `data.b[indices].get_array()`."""
-    bit_map = {bit.index: bit.value for bit in antecedent}
-    indices = sorted(bit_map)
-    packed = sum(
-        bit_map[idx] << (len(indices) - 1 - pos)
-        for pos, idx in enumerate(indices)
-    )
-    return indices, packed
+# def antecedent_value(antecedent: FrozenSet[IndexedBit]) -> Tuple[List[int], int]:
+#     """Liefert die sortierten Indizes und den gepackten Zahlenwert einer
+#     Antezedenz, passend zu `data.b[indices].get_array()`."""
+#     bit_map = {bit.index: bit.value for bit in antecedent}
+#     indices = sorted(bit_map)
+#     packed = sum(
+#         bit_map[idx] << (len(indices) - 1 - pos)
+#         for pos, idx in enumerate(indices)
+#     )
+#     return indices, packed
+
+# def select(data: NBitArray, antecedent: FrozenSet[IndexedBit]) -> NBitArray:
+#     bit_map = [for index, value in antecedent]
+#
+#     return data.b[]
 
 
 class CombinationGen:
     """Erzeugt alle in `data` tatsaechlich vorkommenden Antezedenzen
-    fuer eine gegebene Kombinationsgroesse. Arbeitet auf den gepackten
-    Zahlenwerten von `SliceView`, ohne die Bits zu expandieren."""
+    fuer eine gegebene Kombinationsgroesse.
+
+    `combinations` (nicht `permutations`) ist korrekt: jeder Index
+    erscheint pro Kombination hoechstens einmal.  Da die Antezedenz ein
+    `frozenset` ist (Reihenfolge irrelevant), liefert `combinations`
+    genau die mengenwertigen Teilmengen ohne Duplikate.
+
+    Arbeitet auf den gepackten Zahlenwerten von `SliceView` – die Bits
+    werden erst aufgespalten, wenn sie gebraucht werden.
+    """
 
     def __init__(self, item_count: int):
         self.items = range(item_count)
@@ -124,68 +151,84 @@ class CombinationGen:
 
         for comb in combinations(self.items, draw_count):
             comb_list = list(comb)
-            packed_values = data.b[comb_list].get_array()
-            for val in np.unique(packed_values):
+            for val in np.unique(data.b[comb_list]):
                 yield IndexedBit.from_multiple(comb_list, int(val))
+
+
+def determined_indices(
+    rules_by_consequent: Dict[int, List[Association]],
+) -> Set[int]:
+    """Indizes, die bedingungslos (leere Antezedenz) bestimmt sind."""
+    return {
+        target
+        for target, rules in rules_by_consequent.items()
+        if any(not r.antecedent for r in rules)
+    }
 
 
 def find_consequents(
     data: Bitty,
     antecedent: FrozenSet[IndexedBit],
-    known_indices: Set[int],
-    rules_by_consequent: Dict[int, List[Association]],
-) -> List[Association]:
+    determined: Set[int],
+) -> List[IndexedBit]:
     """Bestimmt alle durch `antecedent` festlegbaren Bits, deren Index
-    noch nicht bekannt ist, und traegt sie (nicht-redundant) ein."""
+    noch nicht bedingungslos bestimmt ist (`determined`).
+
+    `determined` enthaelt die Indizes der Level-0-Regeln (leere
+    Antezedenz).  Diese stoeren nicht weiter, da sie als Kandidaten
+    ausgeschlossen werden.  Indizes mit bedingten Regeln werden nicht
+    ausgeschlossen – unterschiedliche Antezedenzen koennen denselben
+    Index mit unterschiedlichem Wert bestimmen.  Redundanz unter Regeln
+    prueft erst `add_rule`.
+    """
     bit_count = data.get_bit_count()
     candidates = (
         set(range(bit_count))
         - {bit.index for bit in antecedent}
-        - known_indices
+        - determined
     )
     if not candidates:
         return []
 
     if antecedent:
-        indices, packed = antecedent_value(antecedent)
-        mask = data.b[indices].get_array() == packed
-        if not mask.any():
-            return []
-        matching = data.i[mask]
+        a = AccIdxBit(antecedent)
+        matching = a.select(data)
     else:
         matching = data
 
-    new_rules: List[Association] = []
+    result: List[IndexedBit] = []
     for idx in candidates:
-        col_values = matching.b[[idx]].get_array()
-        uniq = np.unique(col_values)
+        col = matching.b[[idx]].get_array()
+        uniq = np.unique(col)
         if len(uniq) == 1:
-            rule = Association(antecedent, IndexedBit(idx, int(uniq[0])))
-            if add_rule(rule, rules_by_consequent):
-                new_rules.append(rule)
-    return new_rules
+            result.append(IndexedBit(idx, int(uniq[0])))
+    return result
 
 
 def find_association_rules(
     data: Bitty,
 ) -> Dict[int, List[Association]]:
     """
-    Level 0 (leere Antezedenz) sammelt einzeln fixierte Werte.
-    Jedes hoehere Level erzeugt Antezedenzen der Groesse `level_idx`
-    und leitet daraus weitere Konsequenten ab. Bereits bestimmte
-    Indizes stoeren nicht weiter, da sie als Kandidaten ausgeschlossen
-    werden.
+    Level 0 (leere Antezedenz) sammelt bedingungslos fixierte Werte als
+    `Association(frozenset(), ...)`.  Jedes hoehere Level erzeugt
+    Antezedenzen der Groesse `level_idx` und leitet daraus weitere
+    Konsequenten ab.
+
+    Bedingungslos bestimmte Indizes (Level 0) stoeren nicht weiter,
+    da sie ueber `determined_indices` als Kandidaten ausgeschlossen
+    werden.  `add_rule` verhindert, dass eine bedingte Regel fuer einen
+    bereits bedingungslos bestimmten Index hinzugefuegt wird.
     """
     bit_count = data.get_bit_count()
 
     rules_by_consequent: Dict[int, List[Association]] = defaultdict(list)
-    known_indices: Set[int] = set()
     gen = CombinationGen(bit_count)
 
     for level_idx in range(bit_count + 1):
+        determined = determined_indices(rules_by_consequent)
         for antecedent in gen.gen(draw_count=level_idx, data=data):
-            find_consequents(data, antecedent, known_indices, rules_by_consequent)
-        known_indices = set(rules_by_consequent.keys())
+            for cons in find_consequents(data, antecedent, determined):
+                add_rule(Association(antecedent, cons), rules_by_consequent)
 
     return rules_by_consequent
 
@@ -204,7 +247,7 @@ if __name__ == "__main__":
         values, counts = np.unique(x, return_counts=True)
 
         rules = find_association_rules(Bitty(values))
-        for target, rule_list in rules.items():
+        for target, rule_list in sorted(rules.items()):
             print(f"target {target}:")
             for rule in rule_list:
                 print(f"  {rule}")
