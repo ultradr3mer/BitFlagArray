@@ -43,10 +43,10 @@ class AccIdxBit(AccessibleAry[IndexedBit]):
         return f"{self[IndexedBit.Fields.index]}={self[IndexedBit.Fields.value]})"
 
     def select(self, data: NBitArray) -> SliceView:
-        mask = data.b[self[IndexedBit.Fields.index]] == get_number(self[IndexedBit.Fields.value])
-        return data[mask]
-
-
+        indices = self[IndexedBit.Fields.index]
+        values = self[IndexedBit.Fields.value]
+        mask = data.b[indices].get_array() == get_number(values).value
+        return data.i[mask]
 
 
 class Association(NamedTuple):
@@ -96,32 +96,15 @@ def applicable_rules(
     ]
 
 
-def candidate_consequent_indices(
-    antecedent: FrozenSet[IndexedBit] | Set[IndexedBit],
-    known: Set[IndexedBit] | FrozenSet[IndexedBit],
-    bit_count: int,
-) -> Set[int]:
-    """Indizes, die weder in der Antezedenz noch bereits bestimmt sind."""
-    antecedent_indices = {bit.index for bit in antecedent}
-    known_indices = {bit.index for bit in known}
-    return set(range(bit_count)) - antecedent_indices - known_indices
-
-
-# def antecedent_value(antecedent: FrozenSet[IndexedBit]) -> Tuple[List[int], int]:
-#     """Liefert die sortierten Indizes und den gepackten Zahlenwert einer
-#     Antezedenz, passend zu `data.b[indices].get_array()`."""
-#     bit_map = {bit.index: bit.value for bit in antecedent}
-#     indices = sorted(bit_map)
-#     packed = sum(
-#         bit_map[idx] << (len(indices) - 1 - pos)
-#         for pos, idx in enumerate(indices)
-#     )
-#     return indices, packed
-
-# def select(data: NBitArray, antecedent: FrozenSet[IndexedBit]) -> NBitArray:
-#     bit_map = [for index, value in antecedent]
-#
-#     return data.b[]
+# def candidate_consequent_indices(
+#     antecedent: FrozenSet[IndexedBit] | Set[IndexedBit],
+#     known: Set[IndexedBit] | FrozenSet[IndexedBit],
+#     bit_count: int,
+# ) -> Set[int]:
+#     """Indizes, die weder in der Antezedenz noch bereits bestimmt sind."""
+#     antecedent_indices = {bit.index for bit in antecedent}
+#     known_indices = {bit.index for bit in known}
+#     return set(range(bit_count)) - antecedent_indices - known_indices
 
 
 class CombinationGen:
@@ -196,12 +179,9 @@ def find_consequents(
     else:
         matching = data
 
-    result: List[IndexedBit] = []
-    for idx in candidates:
-        col = matching.b[[idx]].get_array()
-        uniq = np.unique(col)
-        if len(uniq) == 1:
-            result.append(IndexedBit(idx, int(uniq[0])))
+    result: List[IndexedBit] = [IndexedBit(idx, int(uniq[0])) for idx, uniq
+                                in zip(candidates,np.unique(matching.b[candidates], axis=0))
+                                if len(uniq) == 1]
     return result
 
 
