@@ -261,6 +261,9 @@ class BitFlagArray(NBitArray):
     def i(self):
         return SliceView(self, is_bit_slice=False)
 
+    def group_by_bit(self, key):
+        return SliceView(self).group_by_bit(key)
+
     def rm_b(self, key) -> SliceView:
         return SliceView(self).rm_b(key)
 
@@ -363,6 +366,18 @@ class SliceView(NBitArray):
         key = invert_key(key, self.get_item_count())
         return self.copy(item_slice=merge_slices(self.item_slice, key))
 
+    def group_by_bit(self, key):
+        slice_max = self.get_bit_count()
+        key = normalize_key(key, slice_max)
+        all_key_vals = np.unique(self.b[key])
+
+        def select_data(key_val):
+            return self.i[self.b[key] == key_val].rm_b(key)
+
+        return {
+            key_val: select_data(key_val)
+            for key_val in all_key_vals
+        }
 
     def __getitem__(self, key) -> SliceView:
         view = self.get_next_view(key)

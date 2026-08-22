@@ -109,3 +109,11 @@ def test_remove_itemsplit(bit_data):
     rest = bitty.rm_i(split)
     np.testing.assert_array_equal(rest.i[:split], bitty.i[:split])
     np.testing.assert_array_equal(rest.i[split:], bitty.i[split+1:])
+
+
+def test_group_by_2(bit_data):
+    bitty = Bitty.stack_bit(bit_data)
+    g_idx = 2
+    groups = bitty.group_by_bit(g_idx)
+    np.testing.assert_array_equal(groups[1], bitty.i[[0,3,4]][[0,1,3,4,5]])
+    np.testing.assert_array_equal(groups[0], bitty.i[[1,2,5]][[0,1,3,4,5]])
