@@ -139,6 +139,12 @@ def select_bits(data: NBitAryOnly, key: sliceTypes) -> NBitAryOnly :
         raise NotImplementedError("Index or slice supported.")
 
 
+def invert_key(key, max_length:int):
+    key = normalize_key(key, max_length)
+    mask = np.ones(max_length, dtype=bool)
+    mask[key] = False
+    return normalize_key(mask, max_length)
+
 
 class NBitArray(ABC):
     """Interface for arrays of variable item bit count."""
@@ -181,6 +187,20 @@ class NBitArray(ABC):
     def i(self) -> SliceView:
         """View for bitwise selection."""
 
+    @abstractmethod
+    def rm_b(self, key) -> SliceView:
+        """Perform bitwise remove."""
+
+    @abstractmethod
+    def rm_i(self, key) -> SliceView:
+        """Perform itemwise remove."""
+
+    def split_b(self, key) -> Tuple[SliceView, SliceView]:
+        return self.b[key], self.rm_b(key)
+
+    def split_i(self, key) -> Tuple[SliceView, SliceView]:
+        return self.i[key], self.rm_i(key)
+
 @dataclass
 class NBitAryOnly(NBitArray):
     array: np.ndarray
@@ -199,6 +219,12 @@ class NBitAryOnly(NBitArray):
     @property
     def i(self) -> SliceView:
         return SliceView(self, is_bit_slice=False)
+
+    def rm_b(self, key) -> SliceView:
+        return SliceView(self).rm_b(key)
+
+    def rm_i(self, key) -> SliceView:
+        return SliceView(self).rm_i(key)
 
 
 class BitFlagArray(NBitArray):
@@ -234,6 +260,12 @@ class BitFlagArray(NBitArray):
     @property
     def i(self):
         return SliceView(self, is_bit_slice=False)
+
+    def rm_b(self, key) -> SliceView:
+        return SliceView(self).rm_b(key)
+
+    def rm_i(self, key) -> SliceView:
+        return SliceView(self).rm_i(key)
 
     @staticmethod
     def stack_bit_arys(*arrays: NBitArray):
@@ -290,6 +322,9 @@ class BitFlagArray(NBitArray):
         return BitFlagArray(ary, shape[1])
 
 
+Bitty = BitFlagArray
+
+
 class SliceView(NBitArray):
     def __init__(self,
                  data: NBitArray,
@@ -314,11 +349,20 @@ class SliceView(NBitArray):
 
     @property
     def b(self):
-        return SliceView(self.data, True, self.bit_slice, self.item_slice)
+        return self.copy(is_bit_slice=True)
 
     @property
     def i(self):
-        return SliceView(self.data, False, self.bit_slice, self.item_slice)
+        return self.copy(is_bit_slice=False)
+
+    def rm_b(self, key):
+        key = invert_key(key, self.get_bit_count())
+        return self.copy(bit_slice=merge_slices(self.bit_slice, key))
+
+    def rm_i(self, key):
+        key = invert_key(key, self.get_item_count())
+        return self.copy(item_slice=merge_slices(self.item_slice, key))
+
 
     def __getitem__(self, key) -> SliceView:
         view = self.get_next_view(key)
@@ -347,5 +391,21 @@ class SliceView(NBitArray):
     def get_max_item(self):
         return get_bitmask(self.get_bit_count())
 
-
-Bitty = BitFlagArray
+    def copy(
+            self,
+            *,
+            data: NBitArray | None = None,
+            is_bit_slice: bool | None = None,
+            bit_slice: sliceTypes | None = None,
+            item_slice: sliceTypes | None = None,
+    ) -> "SliceView":
+        return SliceView(
+            data=self.data if data is None else data,
+            is_bit_slice=(
+                self.is_bit_slice
+                if is_bit_slice is None
+                else is_bit_slice
+            ),
+            bit_slice=self.bit_slice if bit_slice is None else bit_slice,
+            item_slice=self.item_slice if item_slice is None else item_slice,
+        )

@@ -93,3 +93,19 @@ def test_get_max_item(bit_data):
     assert bitty.b[1:4].get_max_item() == get_bitmask(3)
     assert bitty.b[:].get_max_item() == get_bitmask(6)
     assert bitty.b[1:4][1:4].get_max_item() == get_bitmask(3)
+
+
+def test_remove_bitsplit(bit_data):
+    bitty = Bitty.stack_bit(bit_data)
+    split = 1
+    rest = bitty.rm_b(split)
+    np.testing.assert_array_equal(rest[:split], bitty.b[:split])
+    np.testing.assert_array_equal(rest[split:], bitty.b[split+1:])
+
+
+def test_remove_itemsplit(bit_data):
+    bitty = Bitty.stack_bit(bit_data)
+    split = 2
+    rest = bitty.rm_i(split)
+    np.testing.assert_array_equal(rest.i[:split], bitty.i[:split])
+    np.testing.assert_array_equal(rest.i[split:], bitty.i[split+1:])
