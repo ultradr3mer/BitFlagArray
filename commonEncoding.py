@@ -29,6 +29,8 @@ def get_bit_count(value: int | np.unsignedinteger):
     return int(value).bit_length()
 
 
+
+
 def get_bitmask(length, start=0):
     return ((1 << int(length)) - 1) << int(start)
     # result = 0
@@ -177,22 +179,14 @@ def fmt_k_bits(b: int) -> str:
     return f"{b:,} bits ({size:.1f} {units[u]})"
 
 
-# def arrange_bits(values, target_indices):
-#     def calc_value_for_bit_idx(bit_idx):
-#         return np.pow(2, bit_idx)
-#     vl = calc_value_for_bit_idx
-#
-#     result = np.zeros_like(values)
-#
-#     for idx_to, idx_from in enumerate(target_indices):
-#         result = result + vl(idx_to) * (vl(idx_from) & values > 0)
-#
-#     return result
-
-def arrange_bits(values, take_indices):
+def arrange_bits(values: NBitArray, take_indices):
     result = np.zeros_like(values)
 
-    for idx_to, idx_from in enumerate(take_indices):
-        result = result + (1 << idx_to) * ((values >> idx_from) & 1)
+    shifts = (np.full_like(take_indices, fill_value=values.get_bit_count() - 1)
+              - np.flip(take_indices, axis=0))
+    from_ary = values.get_array()
+
+    for shift_to, shift_from in enumerate(shifts):
+        result = result + (1 << shift_to) * ((from_ary >> shift_from) & 1)
 
     return result

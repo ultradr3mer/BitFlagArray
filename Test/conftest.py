@@ -2,6 +2,14 @@ import numpy as np
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clear_bitflag_cache():
+    from BitFlagArray import clear_cache
+    clear_cache()
+    yield
+    clear_cache()
+
+
 @pytest.fixture
 def bit_data():
     return np.array([[1, 0, 1, 0, 1, 0],
