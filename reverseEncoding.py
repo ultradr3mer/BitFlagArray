@@ -176,13 +176,21 @@ def find_consequents(
     if antecedent:
         a = AccIdxBit(antecedent)
         matching = a.select(data)
+        if len(matching) == 0:
+            return []
     else:
         matching = data
 
-    result: List[IndexedBit] = [IndexedBit(idx, int(uniq[0])) for idx, uniq
-                                in zip(candidates,np.unique(matching.b[candidates], axis=0))
-                                if len(uniq) == 1]
-    return result
+    candidate_list = sorted(candidates)
+    col_values = matching.b[candidate_list].get_bitwise()
+    first_row = col_values[0:1, :]
+    const_mask = np.all(col_values == first_row, axis=0)
+
+    return [
+        IndexedBit(idx, int(col_values[0, i]))
+        for i, idx in enumerate(candidate_list)
+        if const_mask[i]
+    ]
 
 
 def find_association_rules(
