@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Iterable, Any, List, Tuple, overload, NamedTuple
 
 import numpy as np
@@ -5,8 +6,8 @@ import numpy.typing as npt
 
 from common import get_type_for_array
 
-
-class NBitArray(NamedTuple):
+@dataclass(frozen=True)
+class CommonNBitAry:
     array: np.ndarray
     bit_count: int
 
@@ -14,7 +15,8 @@ class NBitArray(NamedTuple):
     def dtype(self):
         return self.array.dtype
 
-class NBitScalar(NamedTuple):
+@dataclass(frozen=True)
+class CommonNBitSc:
     value: int | np.unsignedinteger
     bit_count: int
 
@@ -49,21 +51,16 @@ def trim_leading_zero(bits: List | np.array):
 
 
 @overload
-def get_number(value: np.ndarray[Tuple[int, int], np.dtype[np.unsignedinteger]] | List[List[int]], axis: int = 0) -> NBitArray: ...
+def get_number(value: np.ndarray[Tuple[int, int], np.dtype[np.unsignedinteger]] | List[List[int]], axis: int = 0) -> CommonNBitAry: ...
 
 
 @overload
-def get_number(value: np.ndarray[Tuple[int], np.dtype[np.unsignedinteger]] | List[int]) -> NBitScalar: ...
+def get_number(value: np.ndarray[Tuple[int], np.dtype[np.unsignedinteger]] | List[int]) -> CommonNBitSc: ...
 
 
-def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[int]], axis: int = 0) -> NBitArray | NBitScalar:
+def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[int]], axis: int = 0) -> CommonNBitAry | CommonNBitSc:
     if not isinstance(value, np.ndarray):
         value = np.array(value, get_type_for_array(value))
-
-    # if value.ndim == 1:
-    #     value = value.reshape((-1, 1))
-    #     result = get_number(value)
-    #     return NBitArray(result.array[0], result.bit_count)
 
     if not isinstance(value, np.ndarray):
         value = np.array(value, get_type_for_array(value))
@@ -73,12 +70,12 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[in
 
     if value.ndim == 1:
         value = int(np.sum((value << bit_range), axis=0))
-        return NBitScalar(value, bit_count)
+        return CommonNBitSc(value, bit_count)
     else:
         if  axis == 0:
             value = value.swapaxes(1, axis)
         value = np.sum((value << bit_range), axis=1)
-        return NBitArray(value.astype(get_type_for_array(value)), bit_count)
+        return CommonNBitAry(value.astype(get_type_for_array(value)), bit_count)
 
 
 def get_bits(value: np.ndarray | int | str, count=None):
