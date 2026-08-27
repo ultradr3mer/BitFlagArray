@@ -80,7 +80,7 @@ def put_bits(values: np.ndarray, put_indices, original_bit_count: int):
               - np.flip(put_indices, axis=0))
 
     for shift_from, shift_to in enumerate(shifts):
-        result = result + (1 << shift_to) * ((values >> shift_from) & 1)
+        result = result + (1 << int(shift_to)) * ((values >> shift_from) & 1)
 
     return result
 
@@ -100,11 +100,11 @@ def merge_slices(global_slice: sliceTypes, local_slice: sliceTypes) -> sliceType
     raise NotImplementedError("Slice not supported.")
 
 
-def limit_to_bit_count(value: np.ndarray, bit_count: int | slice, check_overflow=False) -> NBitAryOnly:
+def limit_to_bit_count(value, bit_count: int | slice, check_overflow=False) -> NBitAryOnly:
     if isinstance(bit_count, slice):
         bit_count = bit_count.stop - bit_count.start
     new_val = value & get_bitmask(bit_count)
-    if check_overflow and not (new_val == value).all():
+    if check_overflow and not np.array_equal(new_val, value):
         raise Exception("Value to large for target bits!")
     return NBitAryOnly(new_val, bit_count)
 

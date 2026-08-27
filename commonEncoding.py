@@ -26,11 +26,11 @@ def get_max_value(bit_count: int) -> np.unsignedinteger:
 
 
 def get_bit_count(value: int | np.unsignedinteger):
-    return int(np.ceil(np.log2(value + 1)))
+    return int(value).bit_length()
 
 
 def get_bitmask(length, start=0):
-    return (np.power(2, length) - 1) << start
+    return ((1 << int(length)) - 1) << int(start)
     # result = 0
     # for i in range(length):
     #     result |= 1 << i
