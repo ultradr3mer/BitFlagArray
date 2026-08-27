@@ -7,6 +7,7 @@ import numpy.typing as npt
 
 from common import get_type_for_bit_count, get_type_for_scalar
 from commonEncoding import get_bitmask, get_number, get_bits
+from commonEncoding import CommonNBitAry
 
 
 def slice_union(s1: slice, s2: slice) -> slice:
@@ -231,6 +232,10 @@ class NBitAryOnly(NBitArray):
     def rm_i(self, key) -> SliceView:
         return SliceView(self).rm_i(key)
 
+    @classmethod
+    def create_from(cls, param: CommonNBitAry):
+        return NBitAryOnly(param.array, param.bit_count)
+
 
 class BitFlagArray(NBitArray):
     def __init__(self, a: NBitArray | np.ndarray, max_bit: int = 0):
@@ -309,9 +314,8 @@ class BitFlagArray(NBitArray):
 
     @classmethod
     def stack_bit(cls, ary: np.ndarray, axis=1):
-        tpl: Tuple[np.ndarray,int] = get_number(ary, axis)
-        return BitFlagArray(NBitAryOnly(*tpl))
-
+        ary = NBitAryOnly.create_from(get_number(ary, axis))
+        return BitFlagArray(ary)
 
     @staticmethod
     def stack_items(*arrays: NBitArray):

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable, Any, List, Tuple, overload, NamedTuple
+from typing import Iterable, Any, List, Tuple, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -157,6 +157,7 @@ def hex_to_bits(hex_str: str, original_length: int | None = None) -> str:
     return bits
 
 
+# noinspection string-conversion-without-dunder-method
 def build_bins_n_print(v, q):
     print(f"Max: {np.max(v)}, Avg: {np.average(v)}")
     bins = np.bincount(v)
