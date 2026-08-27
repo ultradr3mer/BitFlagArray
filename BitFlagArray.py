@@ -1,10 +1,9 @@
 from abc import abstractmethod, abstractproperty, ABC
 from dataclasses import dataclass
-from typing import List, Iterable, Tuple
+from typing import List, Iterable, Tuple, Dict
 
 import numpy as np
 import numpy.typing as npt
-from pyparsing import Dict
 
 from common import get_type_for_bit_count, get_type_for_scalar
 from commonEncoding import get_bitmask, get_number, get_bits
@@ -146,6 +145,11 @@ def invert_key(key, max_length:int):
     mask[key] = False
     return normalize_key(mask, max_length)
 
+def get_indices(key, length: int) -> List[int]:
+    if isinstance(key, slice):
+        start, stop, step = key.indices(length)
+        return list(range(start, stop, step))
+    return list(key)
 
 class NBitArray(ABC):
     """Interface for arrays of variable item bit count."""
@@ -342,6 +346,12 @@ class SliceView(NBitArray):
 
     def get_bit_count(self) -> int:
         return get_slice_item_count(self.bit_slice)
+
+    def get_bit_indices(self):
+        return get_indices(self.bit_slice, self.get_bit_count())
+
+    def get_item_indices(self):
+        return get_indices(self.item_slice, self.get_item_count())
 
     def get_next_view(self, key):
         slice_max = self.get_bit_count() if self.is_bit_slice else len(self.get_array())
