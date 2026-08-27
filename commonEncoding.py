@@ -179,8 +179,11 @@ def fmt_k_bits(b: int) -> str:
     return f"{b:,} bits ({size:.1f} {units[u]})"
 
 
-def arrange_bits(values: NBitArray, take_indices):
-    result = np.zeros_like(values)
+# NOTE: arrange_bits is defined in BitFlagArray.py (single source of truth).
+
+
+def arrange_bits(values, take_indices):
+    result = np.zeros_like(values.get_array())
 
     shifts = (np.full_like(take_indices, fill_value=values.get_bit_count() - 1)
               - np.flip(take_indices, axis=0))

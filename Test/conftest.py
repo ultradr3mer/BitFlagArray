@@ -3,7 +3,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _clear_bitflag_cache():
+def clear_bitflag_cache():
     from BitFlagArray import clear_cache
     clear_cache()
     yield

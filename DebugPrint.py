@@ -2,7 +2,7 @@ from typing import List
 
 from wcwidth import wcwidth as _wcwidth, wcswidth as _wcswidth
 
-from BitFlagArray import SliceView, sliceTypes, get_indices as _get_indices
+from BitFlagArray import SliceView, sliceTypes, get_indices
 
 _SUPERSCRIPT = {
     'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ',
@@ -128,8 +128,8 @@ def _circled_number(bit_idx: int, set: bool) -> str:
 
 
 def print_debug(view: SliceView, mode: str = "1/0") -> str:
-    item_indices = _get_indices(view.item_slice, len(view.data))
-    bit_indices = _get_indices(view.bit_slice, view.data.get_bit_count())
+    item_indices = get_indices(view.item_slice, len(view.data))
+    bit_indices = get_indices(view.bit_slice, view.data.get_bit_count())
     bits = view.get_bitwise()
     is_bit_slice = isinstance(view.bit_slice, slice) and (view.bit_slice.stop - view.bit_slice.start > 1)
 

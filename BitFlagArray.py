@@ -22,7 +22,7 @@ _CACHE: "OrderedDict[tuple, tuple]" = OrderedDict()
 _CACHE_MAX_ENTRIES = 16
 
 
-def _cache_key(root_array: np.ndarray, item_slice, bit_slice) -> tuple:
+def cache_key(root_array: np.ndarray, item_slice, bit_slice) -> tuple:
     def sk(s):
         if isinstance(s, slice):
             return ("s", s.start, s.stop)
@@ -32,7 +32,7 @@ def _cache_key(root_array: np.ndarray, item_slice, bit_slice) -> tuple:
     return (id(root_array), sk(item_slice), sk(bit_slice))
 
 
-def _cache_get(key):
+def cache_get(key):
     if CACHE_KB <= 0:
         return None
     entry = _CACHE.get(key)
@@ -46,7 +46,7 @@ def _cache_get(key):
     return array
 
 
-def _cache_put(key, root_array: np.ndarray, array: np.ndarray):
+def cache_put(key, root_array: np.ndarray, array: np.ndarray):
     if CACHE_KB <= 0:
         return
     _CACHE[key] = (weakref.ref(root_array), array)
@@ -57,7 +57,7 @@ def _cache_put(key, root_array: np.ndarray, array: np.ndarray):
         _CACHE.popitem(last=False)
 
 
-def _cache_invalidate_root(root_id: int):
+def cache_invalidate_root(root_id: int):
     keys = [k for k in _CACHE if k[0] == root_id]
     for k in keys:
         _CACHE.pop(k, None)
@@ -87,7 +87,7 @@ def slice_intersection(s1: slice, s2: slice) -> slice:
     return slice(start, stop)
 
 
-def _slices_to_indices(s) -> np.ndarray:
+def slices_to_indices(s) -> np.ndarray:
     if isinstance(s, slice):
         return np.arange(s.start, s.stop, dtype=np.intp)
     if isinstance(s, list):
@@ -95,7 +95,7 @@ def _slices_to_indices(s) -> np.ndarray:
     return np.asarray(s, dtype=np.intp)
 
 
-def _indices_to_slices(indices) -> sliceTypes:
+def indices_to_slices(indices) -> sliceTypes:
     indices = np.asarray(indices)
     if indices.size == 0:
         return slice(0, 0, 1)
@@ -130,10 +130,10 @@ def normalize_key(key, dim_max) -> sliceTypes:
             indices = np.nonzero(key)[0]
         else:
             indices = np.where(key < 0, dim_max + key, key)
-        return _indices_to_slices(indices)
+        return indices_to_slices(indices)
 
     indices = np.array([normalize_idx(i) for i in key], dtype=np.intp)
-    return _indices_to_slices(indices)
+    return indices_to_slices(indices)
 
 
 def get_slice_item_count(s: sliceTypes):
@@ -144,6 +144,7 @@ def get_slice_item_count(s: sliceTypes):
     if isinstance(s, np.ndarray):
         return len(s)
     raise NotImplementedError("Slice not supported.")
+
 
 def put_bits(values: np.ndarray, put_indices, original_bit_count: int):
     result = np.zeros_like(values)
@@ -162,9 +163,9 @@ def merge_slices(global_slice: sliceTypes, local_slice: sliceTypes) -> sliceType
         return slice(local_slice.start + global_slice.start,
                      local_slice.stop + global_slice.start, 1)
 
-    g_idx = _slices_to_indices(global_slice)
-    l_idx = _slices_to_indices(local_slice)
-    return _indices_to_slices(g_idx[l_idx])
+    g_idx = slices_to_indices(global_slice)
+    l_idx = slices_to_indices(local_slice)
+    return indices_to_slices(g_idx[l_idx])
 
 
 def limit_to_bit_count(value, bit_count: int | slice, check_overflow=False) -> NBitAryOnly:
@@ -182,25 +183,25 @@ def revert_bit_slice(bit_slice: sliceTypes, value, original_bit_count: int):
         return value.array << (original_bit_count - bit_slice.stop)
 
     if isinstance(bit_slice, list) and all(isinstance(x, slice) for x in bit_slice):
-        return _revert_bit_slice_multi(bit_slice, value, original_bit_count)
+        return revert_bit_slice_multi(bit_slice, value, original_bit_count)
 
     if isinstance(bit_slice, np.ndarray):
-        sl = _indices_to_slices(bit_slice)
+        sl = indices_to_slices(bit_slice)
         if isinstance(sl, slice):
             return revert_bit_slice(sl, value, original_bit_count)
-        return _revert_bit_slice_multi(_ndarray_to_slice_list(bit_slice), value, original_bit_count)
+        return revert_bit_slice_multi(ndarray_to_slice_list(bit_slice), value, original_bit_count)
 
     if isinstance(bit_slice, Iterable):
         key_arr = np.asarray(list(bit_slice), dtype=np.intp)
-        sl = _indices_to_slices(key_arr)
+        sl = indices_to_slices(key_arr)
         if isinstance(sl, slice):
             return revert_bit_slice(sl, value, original_bit_count)
-        return _revert_bit_slice_multi(_ndarray_to_slice_list(key_arr), value, original_bit_count)
+        return revert_bit_slice_multi(ndarray_to_slice_list(key_arr), value, original_bit_count)
 
     raise NotImplementedError("Slice not supported.")
 
 
-def _revert_bit_slice_multi(slices: List[slice], value, original_bit_count: int):
+def revert_bit_slice_multi(slices: List[slice], value, original_bit_count: int):
     total = sum(s.stop - s.start for s in slices)
     value = value & get_bitmask(total)
     result = np.zeros_like(np.asarray(value))
@@ -213,7 +214,7 @@ def _revert_bit_slice_multi(slices: List[slice], value, original_bit_count: int)
     return result
 
 
-def _ndarray_to_slice_list(indices) -> List[slice]:
+def ndarray_to_slice_list(indices) -> List[slice]:
     indices = np.asarray(indices)
     if indices.size == 0:
         return []
@@ -231,29 +232,29 @@ def select_bits(data: 'NBitAryOnly', key: sliceTypes) -> 'NBitAryOnly':
         return limit_to_bit_count(shifted, key)
 
     if isinstance(key, list) and all(isinstance(x, slice) for x in key):
-        return _select_bits_multi(data, key)
+        return select_bits_multi(data, key)
 
     if isinstance(key, np.ndarray):
         if not np.all((key >= 0) & (key <= data.get_bit_count())):
             raise ValueError(f"All indices must be between 0 and {data.get_bit_count()}.")
-        sl = _indices_to_slices(key)
+        sl = indices_to_slices(key)
         if isinstance(sl, slice):
             return select_bits(data, sl)
-        return _select_bits_multi(data, _ndarray_to_slice_list(key))
+        return select_bits_multi(data, ndarray_to_slice_list(key))
 
     if isinstance(key, Iterable):
         key_arr = np.asarray(list(key), dtype=np.intp)
         if not np.all((key_arr >= 0) & (key_arr <= data.get_bit_count())):
             raise ValueError(f"All indices must be between 0 and {data.get_bit_count()}.")
-        sl = _indices_to_slices(key_arr)
+        sl = indices_to_slices(key_arr)
         if isinstance(sl, slice):
             return select_bits(data, sl)
-        return _select_bits_multi(data, _ndarray_to_slice_list(key_arr))
+        return select_bits_multi(data, ndarray_to_slice_list(key_arr))
 
     raise NotImplementedError("Index or slice supported.")
 
 
-def _select_bits_multi(data: 'NBitAryOnly', slices: List[slice]) -> 'NBitAryOnly':
+def select_bits_multi(data: 'NBitAryOnly', slices: List[slice]) -> 'NBitAryOnly':
     n = sum(s.stop - s.start for s in slices)
     if n == 0:
         return NBitAryOnly(np.zeros_like(data.get_array()), 0)
@@ -293,14 +294,14 @@ def get_indices(key, length: int) -> List[int]:
         return result
     return list(key)
 
-def _index_array(array: np.ndarray, key) -> np.ndarray:
+def index_array(array: np.ndarray, key) -> np.ndarray:
     if isinstance(key, list) and all(isinstance(x, slice) for x in key):
         parts = [array[s] for s in key]
         return parts[0] if len(parts) == 1 else np.concatenate(parts)
     return array[key]
 
 
-def _set_index_array(array: np.ndarray, key, value):
+def set_index_array(array: np.ndarray, key, value):
     if isinstance(key, list) and all(isinstance(x, slice) for x in key):
         pos = 0
         for s in key:
@@ -581,14 +582,14 @@ class SliceView(NBitArray):
                 f"Call .copy() to materialize and persist."
             )
         root_arr = self.data.get_array()
-        ckey = _cache_key(root_arr, self.item_slice, self.bit_slice)
-        cached = _cache_get(ckey)
+        ckey = cache_key(root_arr, self.item_slice, self.bit_slice)
+        cached = cache_get(ckey)
         if cached is not None:
             return NBitAryOnly(cached, self.get_bit_count())
 
-        items = _index_array(root_arr, self.item_slice)
+        items = index_array(root_arr, self.item_slice)
         result = select_bits(NBitAryOnly(items, self.data.get_bit_count()), self.bit_slice)
-        _cache_put(ckey, root_arr, result.get_array())
+        cache_put(ckey, root_arr, result.get_array())
         return result
 
     def write(self, value):
@@ -602,10 +603,10 @@ class SliceView(NBitArray):
 
         inv_slice, full_mask = self._write_mask
         root_arr = self.data.get_array()
-        current = _index_array(root_arr, self.item_slice)
+        current = index_array(root_arr, self.item_slice)
         new_items = current & inv_slice | reverted
-        _set_index_array(root_arr, self.item_slice, new_items)
-        _cache_invalidate_root(id(root_arr))
+        set_index_array(root_arr, self.item_slice, new_items)
+        cache_invalidate_root(id(root_arr))
 
     def get_max_item(self):
         return get_bitmask(self.get_bit_count())

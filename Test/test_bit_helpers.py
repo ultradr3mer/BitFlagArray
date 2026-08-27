@@ -3,10 +3,11 @@ import pytest
 
 from BitFlagArray import (
     NBitAryOnly,
-    limit_to_bit_count, select_bits, arrange_bits, put_bits,
+    limit_to_bit_count, select_bits, put_bits,
     merge_slices, normalize_key, get_indices, get_slice_item_count,
     slice_union, slice_intersection,
 )
+from commonEncoding import arrange_bits
 
 
 def test_slice_union():
