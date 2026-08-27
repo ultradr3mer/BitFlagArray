@@ -5,8 +5,9 @@ import pytest
 
 from commonEncoding import (
     get_bitmask, get_bit_count, get_number, get_bits,
-    bits_to_hex, hex_to_bits,
+    bits_to_hex, hex_to_bits, arrange_bits,
 )
+from BitFlagArray import NBitAryOnly, put_bits
 
 
 def test_get_bitmask_no_start():
@@ -102,3 +103,11 @@ def test_bits_to_hex_and_back():
 def test_bits_to_hex_padding():
     assert bits_to_hex("1") == "8"
     assert hex_to_bits(bits_to_hex("1"), 1) == "1"
+
+
+def test_arrange_bits_inverts_put_bits():
+    data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
+    indices = [0, 2, 4]
+    arranged = arrange_bits(data, indices)
+    back = put_bits(arranged, np.array(indices), 6)
+    np.testing.assert_array_equal(back, data.get_array())

@@ -7,7 +7,6 @@ from BitFlagArray import (
     merge_slices, normalize_key, get_indices, get_slice_item_count,
     slice_union, slice_intersection,
 )
-from commonEncoding import arrange_bits
 
 
 def test_slice_union():
@@ -131,14 +130,6 @@ def test_select_bits_unsupported_key_type():
     data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
     with pytest.raises(NotImplementedError):
         select_bits(data, 1.5)
-
-
-def test_arrange_bits_inverts_put_bits():
-    data = NBitAryOnly(np.array([0b101010], dtype=np.uint8), 6)
-    indices = [0, 2, 4]
-    arranged = arrange_bits(data, indices)
-    back = put_bits(arranged, np.array(indices), 6)
-    np.testing.assert_array_equal(back, data.get_array())
 
 
 def test_put_bits_places_value_at_positions():
