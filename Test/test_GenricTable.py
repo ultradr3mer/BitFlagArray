@@ -2,196 +2,145 @@ import numpy as np
 import pytest
 
 from GenricTable import (
-    TblAndColumn,
-    MyTable,
-    MyRow,
+    NpColDef,
+    to_col_defs,
+    create_table_type,
+    TableType,
+    FieldSpec,
 )
 
 
 # --------------------------------------------------------------------
-# skeleton / type-level
+# NpColDef / to_col_defs
 # --------------------------------------------------------------------
 
-def test_tbl_and_column_is_named_tuple():
-    assert issubclass(TblAndColumn, tuple)
-    assert TblAndColumn._fields == ("kind", "abs_min", "max", "bits")
+def test_to_col_defs_basic():
+    spec: FieldSpec = [
+        ('kind', np.bool), ('abs_min', np.uint64),
+        ('max', np.uint64), ('bits', np.uint8),
+    ]
+    cols = to_col_defs(spec)
+    assert len(cols) == 4
+    assert all(isinstance(c, NpColDef) for c in cols)
+    assert cols[0].name == 'kind'
+    assert cols[0].type == np.dtype(np.bool)
+    assert cols[1].type == np.dtype(np.uint64)
+    assert cols[3].type == np.dtype(np.uint8)
 
 
-def test_my_table_field_types_are_ndarray():
-    tbl = MyTable(
-        kind=np.array([True, False]),
-        abs_min=np.array([0, 1], dtype=np.uint64),
-        max=np.array([255, 65535], dtype=np.uint64),
-        bits=np.array([8, 16], dtype=np.uint8),
-    )
-    assert isinstance(tbl.kind, np.ndarray)
+def test_to_col_defs_normalizes_dtype():
+    cols = to_col_defs([('x', 'u8'), ('y', 'bool')])
+    assert cols[0].type == np.dtype('u8')
+    assert cols[1].type == np.dtype('bool')
+
+
+# --------------------------------------------------------------------
+# create_table_type / TableType
+# --------------------------------------------------------------------
+
+@pytest.fixture
+def my_types():
+    spec: FieldSpec = [
+        ('kind', np.bool), ('abs_min', np.uint64),
+        ('max', np.uint64), ('bits', np.uint8),
+    ]
+    return create_table_type("MyTypes", to_col_defs(spec))
+
+
+def test_create_table_type_returns_table_type(my_types):
+    assert isinstance(my_types, TableType)
+
+
+def test_dtype(my_types):
+    dt = my_types.dtype
+    assert dt.names == ('kind', 'abs_min', 'max', 'bits')
+    assert dt['kind'] == np.dtype(np.bool)
+    assert dt['max'] == np.dtype(np.uint64)
+    assert dt['bits'] == np.dtype(np.uint8)
+
+
+def test_row_type(my_types):
+    Row = my_types.row_type
+    row = Row(kind=True, abs_min=0, max=255, bits=8)
+    assert int(row.max) == 255
+    assert int(row.bits) == 8
+    assert bool(row.kind) is True
+
+
+def test_build(my_types):
+    tbl = my_types.build([
+        (True, 0, 255, 8),
+        (False, 1, 65535, 16),
+    ])
+    assert len(tbl.kind) == 2
+    assert tbl.kind[0] == True
+    assert tbl.kind[1] == False
+    assert int(tbl.max[0]) == 255
+    assert int(tbl.max[1]) == 65535
+    assert int(tbl.bits[0]) == 8
+    assert int(tbl.bits[1]) == 16
+
+
+def test_build_field_dtypes(my_types):
+    tbl = my_types.build([(True, 0, 255, 8)])
     assert tbl.kind.dtype == np.bool
     assert tbl.abs_min.dtype == np.uint64
     assert tbl.max.dtype == np.uint64
     assert tbl.bits.dtype == np.uint8
 
 
-def test_my_row_field_types_are_scalars():
-    row = MyRow(kind=True, abs_min=0, max=255, bits=8)
-    # scalars, not arrays
-    assert not isinstance(row.kind, np.ndarray)
-    assert row.kind is True or bool(row.kind) is True
-    assert int(row.max) == 255
-    assert int(row.bits) == 8
-
-
-def test_table_and_row_share_field_names():
-    assert MyTable._fields == MyRow._fields == TblAndColumn._fields
-
-
-# --------------------------------------------------------------------
-# construction / indexing
-# --------------------------------------------------------------------
-
-def test_table_construction_keyword():
-    tbl = MyTable(
-        kind=np.array([True]),
-        abs_min=np.array([1], dtype=np.uint64),
-        max=np.array([1], dtype=np.uint64),
-        bits=np.array([1], dtype=np.uint8),
+def test_row(my_types):
+    ary = np.asarray(
+        [(True, 0, 255, 8), (False, 1, 65535, 16)],
+        dtype=my_types.dtype,
     )
-    assert len(tbl.kind) == 1
-    assert bool(tbl.kind[0]) is True
+    row0 = my_types.row(ary, 0)
+    row1 = my_types.row(ary, 1)
+    assert bool(row0.kind) is True
+    assert bool(row1.kind) is False
+    assert int(row0.max) == 255
+    assert int(row1.bits) == 16
 
 
-def test_table_construction_positional():
-    tbl = MyTable(
-        np.array([True]),
-        np.array([1], dtype=np.uint64),
-        np.array([1], dtype=np.uint64),
-        np.array([1], dtype=np.uint8),
+def test_rows(my_types):
+    ary = np.asarray(
+        [(True, 0, 255, 8), (False, 1, 65535, 16), (True, 2, 4294967295, 32)],
+        dtype=my_types.dtype,
     )
-    assert len(tbl) == 4  # NamedTuple length = number of fields
-    assert bool(tbl.kind[0]) is True
+    rows = my_types.rows(ary)
+    assert len(rows) == 3
+    assert bool(rows[0].kind) is True
+    assert bool(rows[1].kind) is False
+    assert int(rows[2].max) == 4294967295
 
 
-def test_row_is_hashable():
-    row = MyRow(kind=True, abs_min=0, max=255, bits=8)
-    assert hash(row)  # NamedTuple is hashable
+def test_row_is_hashable(my_types):
+    row = my_types.row_type(kind=True, abs_min=0, max=255, bits=8)
+    assert hash(row)
 
 
-def test_row_equality():
-    r1 = MyRow(True, 0, 255, 8)
-    r2 = MyRow(True, 0, 255, 8)
-    r3 = MyRow(False, 0, 255, 8)
+def test_row_equality(my_types):
+    Row = my_types.row_type
+    r1 = Row(True, 0, 255, 8)
+    r2 = Row(True, 0, 255, 8)
+    r3 = Row(False, 0, 255, 8)
     assert r1 == r2
     assert r1 != r3
 
 
-def test_table_unpacking():
-    tbl = MyTable(
-        kind=np.array([True, False]),
-        abs_min=np.array([0, 1], dtype=np.uint64),
-        max=np.array([255, 65535], dtype=np.uint64),
-        bits=np.array([8, 16], dtype=np.uint8),
-    )
-    kind, abs_min, max_, bits = tbl
+def test_table_unpacking(my_types):
+    tbl = my_types.build([
+        (True, 0, 255, 8),
+        (False, 1, 65535, 16),
+    ])
+    kind, abs_min, max_, bits, _row_type = tbl
     assert np.array_equal(kind, [True, False])
     assert np.array_equal(max_, [255, 65535])
 
 
-def test_row_unpacking():
-    row = MyRow(True, 0, 255, 8)
-    kind, abs_min, max_, bits = row
-    assert kind is True or bool(kind) is True
-    assert bits == 8
-
-
-# --------------------------------------------------------------------
-# dtype derivation (what LookupTable machinery needs to know)
-# --------------------------------------------------------------------
-
-def test_field_dtypes_from_numpy_arrays():
-    tbl = MyTable(
-        kind=np.array([True]),
-        abs_min=np.array([1], dtype=np.uint64),
-        max=np.array([1], dtype=np.uint64),
-        bits=np.array([1], dtype=np.uint8),
-    )
-    assert tbl.kind.dtype == np.bool
-    assert tbl.abs_min.dtype == np.uint64
-    assert tbl.max.dtype == np.uint64
-    assert tbl.bits.dtype == np.uint8
-
-
-def test_field_dtypes_match_spec():
-    """The field dtypes of MyTable columns must match the TblAndColumn spec."""
-    spec_dtypes = {
-        'kind':     np.dtype(np.bool),
-        'abs_min':  np.dtype(np.uint64),
-        'max':      np.dtype(np.uint64),
-        'bits':     np.dtype(np.uint8),
-    }
-    tbl = MyTable(
-        kind=np.array([True], dtype=spec_dtypes['kind']),
-        abs_min=np.array([1], dtype=spec_dtypes['abs_min']),
-        max=np.array([1], dtype=spec_dtypes['max']),
-        bits=np.array([1], dtype=spec_dtypes['bits']),
-    )
-    for name, expected in spec_dtypes.items():
-        assert getattr(tbl, name).dtype == expected
-
-
-# --------------------------------------------------------------------
-# numpy interop
-# --------------------------------------------------------------------
-
-def test_table_columns_are_views_or_copies_of_source():
-    kind = np.array([True, False])
-    tbl = MyTable(
-        kind=kind,
-        abs_min=np.array([0, 1], dtype=np.uint64),
-        max=np.array([255, 65535], dtype=np.uint64),
-        bits=np.array([8, 16], dtype=np.uint8),
-    )
-    assert tbl.kind is kind  # NamedTuple stores the reference
-
-
-def test_iteration_over_rows_from_table_columns():
-    tbl = MyTable(
-        kind=np.array([True, False, True]),
-        abs_min=np.array([0, 1, 2], dtype=np.uint64),
-        max=np.array([255, 65535, 255], dtype=np.uint64),
-        bits=np.array([8, 16, 8], dtype=np.uint8),
-    )
-    rows = [
-        MyRow(
-            kind=bool(tbl.kind[i]),
-            abs_min=int(tbl.abs_min[i]),
-            max=int(tbl.max[i]),
-            bits=int(tbl.bits[i]),
-        )
-        for i in range(len(tbl.kind))
-    ]
-    assert len(rows) == 3
-    assert rows[0].kind is True or bool(rows[0].kind) is True
-    assert rows[1].kind is False or bool(rows[1].kind) is False
-    assert rows[2].max == 255
-    assert rows[1].bits == 16
-
-
-def test_structured_array_to_rows():
-    """Simulate what LookupTable.__iter__ does: structured array -> MyRow."""
-    dt = np.dtype([
-        ('kind', np.bool),
-        ('abs_min', np.uint64),
-        ('max', np.uint64),
-        ('bits', np.uint8),
-    ])
-    arr = np.array(
-        [(True, 0, 255, 8), (False, 1, 65535, 16)],
-        dtype=dt,
-    )
-    rows = [MyRow(kind=r['kind'], abs_min=r['abs_min'], max=r['max'], bits=r['bits']) for r in arr]
-    assert bool(rows[0].kind) is True
-    assert bool(rows[1].kind) is False
-    assert int(rows[0].max) == 255
-    assert int(rows[1].bits) == 16
+def test_table_has_row_type_attribute(my_types):
+    tbl = my_types.build([(True, 0, 255, 8)])
+    assert tbl.row_type is my_types.row_type
 
 
 if __name__ == "__main__":
