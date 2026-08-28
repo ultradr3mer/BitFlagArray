@@ -1,6 +1,8 @@
 from argparse import ArgumentError
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload
+from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal, get_type_hints, \
+    get_origin
 
 import numpy as np
 import numpy.typing as npt
@@ -20,95 +22,6 @@ class ExcRaiser(Generic[T_ret]):
 
     def do_raise(self) -> T_ret:
         raise self.exception_cls(self.message)
-
-#====================================================
-#                   TYPE DETECTION
-#====================================================
-
-exc_to_many_bit: ExcRaiser[type] = ExcRaiser(ArgumentError, "To many bits to fit.")
-_UINT_TYPES = (np.ubyte, np.uint16, np.uint32, np.uint64)
-
-def _get_type(value: int, attr: str):
-    for dtype in _UINT_TYPES:
-        if value <= getattr(np.iinfo(dtype), attr):
-            return dtype
-
-    return exc_to_many_bit.do_raise()
-
-def get_type_for_scalar(value: int):
-    return _get_type(value, "max")
-
-def get_type_for_bit_count(bit_count: int):
-    return _get_type(bit_count, "bits")
-
-def get_type_for_array(ary: np.ndarray | List[Any] | Iterable[Any]):
-    if isinstance(ary, np.ndarray):
-        return _get_type(np.max(ary), "max")
-    else:
-        return _get_type(max(ary), "max")
-
-@overload
-def get_as_signed(a: np.dtype[Any]) -> np.dtype[Any]: ...
-
-@overload
-def get_as_signed(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
-
-
-def get_as_signed(
-    a: npt.ArrayLike | np.dtype[Any],
-) -> np.ndarray | np.dtype[Any]:
-    if isinstance(a, np.dtype):
-        if a.kind == "i":
-            return a
-        if a.kind != "u":
-            raise TypeError("Expected an integer dtype")
-
-        return np.dtype(f"i{a.itemsize}")
-
-    a = np.asarray(a)
-
-    if a.dtype.kind == "i":
-        return a
-    if a.dtype.kind != "u":
-        raise TypeError("Expected an integer array")
-
-    return a.astype(np.dtype(f"i{a.dtype.itemsize}"))
-
-
-
-@overload
-def get_as_unsigned(a: np.dtype[Any]) -> np.dtype[Any]: ...
-
-@overload
-def get_as_unsigned(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
-
-
-def get_as_unsigned(
-    a: npt.ArrayLike | np.dtype[Any],
-) -> np.ndarray | np.dtype[Any]:
-    if isinstance(a, np.dtype):
-        if a.kind == "u":
-            return a
-        if a.kind != "i":
-            raise TypeError("Expected an integer dtype")
-
-        return np.dtype(f"u{a.itemsize}")
-
-    a = np.asarray(a)
-
-    if a.dtype.kind == "u":
-        return a
-    if a.dtype.kind != "i":
-        raise TypeError("Expected an integer array")
-
-    return a.astype(np.dtype(f"u{a.dtype.itemsize}"))
-
-
-def iter_bits(data):
-    for byte in data:
-        for i in range(8):
-            yield (byte >> (7 - i)) & 1
-
 
 #====================================================
 #           ACCESSING FELDS OVER CONTAINER
@@ -159,14 +72,246 @@ class AccessibleAry(Generic[T_item]):
         self.inner.extend(param)
 
 
+#====================================================
+#                   TYPE DETECTION
+#====================================================
+
+T_constr_item = TypeVar('T_constr_item', bound=Any)
+
+Undefined = Literal
+
+@dataclass(frozen=True)
+class ConstraintSelection:
+    indices: npt.NDArray[np.intp]
+
+    def __and__(self, other: "ConstraintSelection") -> "ConstraintSelection":
+        if not isinstance(other, ConstraintSelection):
+            return NotImplemented
+
+        return ConstraintSelection(
+            np.intersect1d(self.indices, other.indices)
+        )
+
+import operator
+
+class ConstraintColumn(Generic[T_constr_item]):
+    def __init__(self, inner: npt.NDArray[T_constr_item]):
+        self.inner = inner
+
+    def __getitem__(self, key):
+        return self.inner[key]
+
+    def _compare(self, value: object, op) -> ConstraintSelection:
+        if value is Undefined:
+            mask = np.ones(len(self.inner), dtype=bool)
+        else:
+            mask = op(self.inner, value)
+
+        return ConstraintSelection(np.flatnonzero(mask))
+
+    def __eq__(self, value: object) -> ConstraintSelection:
+        return self._compare(value, operator.eq)
+
+    def __ne__(self, value: object) -> ConstraintSelection:
+        return self._compare(value, operator.ne)
+
+    def __lt__(self, value: object) -> ConstraintSelection:
+        return self._compare(value, operator.lt)
+
+    def __le__(self, value: object) -> ConstraintSelection:
+        return self._compare(value, operator.le)
+
+    def __gt__(self, value: object) -> ConstraintSelection:
+        return self._compare(value, operator.gt)
+
+    def __ge__(self, value: object) -> ConstraintSelection:
+        return self._compare(value, operator.ge)
 
 
-class LoopData(NamedTuple):
-    class Fields(StrEnum):
-        data = "data"
-        condition = "condition"
-        undefined_indices = "undefined_indices"
-    data: NBitArray
-    condition: List[IndexedBit]
-    undefined_indices: List[int]
+T_tbl_impl = TypeVar('T_tbl_impl')
+
+CCol = ConstraintColumn
+
+class LookupTable(NamedTuple, Generic[T_tbl_impl]):
+    @classmethod
+    def dtype(cls) -> np.dtype:
+        hints = get_type_hints(cls)
+
+        fields = []
+
+        for name in cls._fields:
+            annotation = hints[name]
+
+            # Bei CCol[np.uint64] ist:
+            # origin == CCol
+            # args == (np.uint64,)
+            if get_origin(annotation) is not CCol:
+                raise TypeError(
+                    f"{cls.__name__}.{name} must be annotated as CCol[...]"
+                )
+
+            (item_type,) = get_args(annotation)
+            fields.append((name, np.dtype(item_type)))
+
+        return np.dtype(fields)
+
+    @classmethod
+    def build(cls, array: npt.ArrayLike):
+        dtype = cls.dtype()
+        ary = np.asarray(array, dtype=dtype)
+
+        return cls(
+            *(CCol(ary[name]) for name in cls._fields)
+        )
+
+    @classmethod
+    def unpack(cls, array: npt.ArrayLike):
+        """Gibt die einzelnen rohen NumPy-Spalten zurück."""
+        ary = np.asarray(array, dtype=cls.dtype())
+        return tuple(ary[name] for name in cls._fields)
+
+
+
+class TypeLookup2(LookupTable):
+    signed: CCol[np.bool]
+    abs_min: CCol[np.uint64]
+    max: CCol[np.uint64]
+    bits: CCol[np.uint64]
+
+class TypeLookup(LookupTable):
+    def __init__(self):
+        kind = {'u': False, 'i': True}
+        sizes = [1, 2, 4, 8]
+        types = np.array([
+            np.dtype(f"{k}{s}")
+            for k in kind
+            for s in sizes
+        ])
+
+        self.signed: CCol[], self.abs_min, self.max self.bits = ConstraintColumn(lookup['bits'])
+        #
+        # self.signed = ConstraintColumn(lookup['kind'])
+        # self.abs_min = ConstraintColumn(lookup['abs_min'])
+        # self.max = ConstraintColumn(lookup['max'])
+        # self.bits = ConstraintColumn(lookup['bits'])
+
+    def _build(self):
+        return np.array(
+            [
+                (
+                    self.kind[t.kind],
+                    -np.iinfo(t).min,
+                    np.iinfo(t).max,
+                    np.iinfo(t).bits,
+                )
+                for t in self.types
+            ],
+            dtype=[
+                ('kind', np.bool),
+                ('abs_min', np.uint64),
+                ('max', np.uint64),
+                ('bits', np.uint8),
+            ],
+        )
+
+    def first(self, condition: np.ndarray):
+        return self.all(condition)[0]
+
+    def all(self, condition):
+        return self.types[np.where(condition)]
+
+
+_LOOKUP_TBL = TypeLookup()
+print(_LOOKUP_TBL.signed == False)
+print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max > 123)
+print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max <= 123)
+print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max < 123)
+
+def _get_type(value: int, attr: str, signed: bool = False):
+    for dtype in _S_INT_TYPES if signed else _U_INT_TYPES:
+        if value <= getattr(np.iinfo(dtype), attr):
+            return dtype
+
+    return exc_to_many_bit.do_raise()
+
+def get_type_for_scalar(value: int, signed: bool = False):
+    # w = np.where(_LOOKUP_TBL.lookup.max >= value)
+    # return _LOOKUP_TBL(, signed)
+    pass
+
+def get_type_for_bit_count(bit_count: int, signed: bool = False):
+    return _get_type(bit_count, "bits", signed)
+
+def get_type_for_array(ary: np.ndarray | List[Any] | Iterable[Any], signed: bool = False):
+    if isinstance(ary, np.ndarray):
+        return _get_type(np.max(np.abs(ary) if signed else ary), "max", signed)
+    else:
+        if signed:
+            return _get_type(max(-min(ary), max(ary)), "max", signed)
+        else:
+            return _get_type(max(ary), "max", signed)
+
+@overload
+def get_as_signed(a: np.dtype[Any]) -> np.dtype[Any]: ...
+
+@overload
+def get_as_signed(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
+
+
+def get_as_signed(
+    a: npt.ArrayLike | np.dtype[Any],
+) -> np.ndarray | np.dtype[Any]:
+    if isinstance(a, np.dtype):
+        if a.kind == "i":
+            return a
+        if a.kind != "u":
+            raise TypeError("Expected an integer dtype")
+
+        return np.dtype(f"i{a.itemsize}")
+
+    a = np.asarray(a)
+
+    if a.dtype.kind == "i":
+        return a
+    if a.dtype.kind != "u":
+        raise TypeError("Expected an integer array")
+
+    return a.astype(np.dtype(f"i{a.dtype.itemsize}"))
+
+
+
+@overload
+def get_as_unsigned(a: np.dtype[Any]) -> np.dtype[Any]: ...
+
+@overload
+def get_as_unsigned(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
+
+
+def get_as_unsigned(
+    a: npt.ArrayLike | np.dtype[Any],
+    fit: bool = False,
+) -> np.ndarray | np.dtype[Any]:
+    if isinstance(a, np.dtype):
+        if a.kind == "u":
+            return a
+        if a.kind != "i":
+            raise TypeError("Expected an integer dtype")
+
+        return np.dtype(f"u{a.itemsize}")
+
+    a = np.asarray(a)
+
+    if a.dtype.kind == "u":
+        return a
+    if a.dtype.kind != "i":
+        raise TypeError("Expected an integer array")
+
+    return a.astype(np.dtype(f"u{a.dtype.itemsize}"))
+
+
+def iter_bits(data):
+    for byte in data:
+        for i in range(8):
+            yield (byte >> (7 - i)) & 1
+
 
