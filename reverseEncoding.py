@@ -22,6 +22,9 @@ class IndexedBit(NamedTuple):
     index: int
     value: int
 
+    def __repr__(self):
+        return f"{self.index}={self.value}"
+
     @classmethod
     def from_multiple(
         cls,
@@ -40,7 +43,7 @@ class AccIdxBit(AccessibleAry[IndexedBit]):
         super().__init__(inner)
 
     def __repr__(self):
-        return f"{self[IndexedBit.Fields.index]}={self[IndexedBit.Fields.value]})"
+        return f"{self[IndexedBit.Fields.index]}={self[IndexedBit.Fields.value]}"
 
     def select(self, data: NBitArray) -> SliceView:
         indices = self[IndexedBit.Fields.index]
