@@ -5,7 +5,7 @@ from typing import NamedTuple
 from GenricTable import (
     NpColDef,
     to_col_defs,
-    _col_defs_from_rowtype,
+    get_defs_from_rowtype,
     FieldSpec,
     Table,
     PlainTable,
@@ -47,7 +47,7 @@ def test_col_defs_from_rowtype():
         max: np.uint64
         bits: np.uint8
 
-    cols = _col_defs_from_rowtype(MyRow)
+    cols = get_defs_from_rowtype(MyRow)
     assert len(cols) == 4
     assert cols[0] == NpColDef('kind', np.dtype(np.uint8))
     assert cols[1] == NpColDef('abs_min', np.dtype(np.uint64))
