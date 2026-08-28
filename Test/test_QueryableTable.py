@@ -3,10 +3,9 @@ from typing import NamedTuple
 import numpy as np
 import pytest
 
-from GenricTable import TableCreator
 from QueryableTable import (
-    Table,
     QueryableTable,
+    ConstraintColAdapter,
     ConstraintColumn,
     ConstraintSelection,
 )
@@ -43,34 +42,16 @@ def lookup_data():
     return rows
 
 
-# --------------------------------------------------------------------
-# Table abstract base
-# --------------------------------------------------------------------
-
-def test_table_is_abstract():
-    with pytest.raises(TypeError):
-        Table("x", [], TypeLookupRow)  # type: ignore[abstract]
-
-
-def test_queryable_subclass_requires_get_row_type():
-    class Bad(QueryableTable[TypeLookupRow]):
-        pass
-    with pytest.raises(TypeError):
-        Bad("x", [], TypeLookupRow)  # type: ignore[abstract]
+@pytest.fixture
+def tbl(lookup_data) -> QueryableTable[TypeLookupRow]:
+    return QueryableTable("TypeLookup", lookup_data, TypeLookupRow)
 
 
 # --------------------------------------------------------------------
-# QueryableTable[TRow] — subclass API
+# QueryableTable — construction
 # --------------------------------------------------------------------
 
-class TypeLookup(QueryableTable[TypeLookupRow]):
-    @classmethod
-    def get_row_type(cls) -> type[TypeLookupRow]:
-        return TypeLookupRow
-
-
-def test_build(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_build(tbl):
     assert tbl.name == "TypeLookup"
     assert tbl.row_type is TypeLookupRow
     assert tbl.dtype.names == ('signed', 'abs_min', 'max', 'bits', 'prev_max')
@@ -78,28 +59,24 @@ def test_build(lookup_data):
     assert tbl.dtype['max'] == np.dtype(np.uint64)
 
 
-def test_build_columns_are_constraint_columns(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_build_columns_are_constraint_columns(tbl):
     assert isinstance(tbl.signed, ConstraintColumn)
     assert isinstance(tbl.max, ConstraintColumn)
     assert isinstance(tbl.prev_max, ConstraintColumn)
 
 
-def test_len(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_len(tbl):
     assert len(tbl) == 8
 
 
-def test_getitem_int_returns_row(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_getitem_int_returns_row(tbl):
     row = tbl[0]
     assert isinstance(row, TypeLookupRow)
     assert bool(row.signed) is False
     assert int(row.max) == 255
 
 
-def test_iter_yields_rows(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_iter_yields_rows(tbl):
     rows = list(tbl)
     assert len(rows) == 8
     assert all(isinstance(r, TypeLookupRow) for r in rows)
@@ -107,26 +84,39 @@ def test_iter_yields_rows(lookup_data):
     assert bool(rows[4].signed) is True
 
 
-def test_rows_helper(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_rows_helper(tbl):
     rows = tbl.rows()
     assert len(rows) == 8
     assert isinstance(rows[0], TypeLookupRow)
+
+
+def test_adapters_use_base_init(tbl):
+    adapter = tbl.adapter['signed']
+    assert isinstance(adapter, ConstraintColAdapter)
+    assert adapter.name == 'signed'
+    assert adapter.parent is tbl
+
+
+def test_direct_construction_simple_row():
+    stbl: QueryableTable[SimpleRow] = QueryableTable("simple", [(0, 10), (1, 20), (2, 30)], SimpleRow)
+    assert stbl.name == "simple"
+    assert stbl.row_type is SimpleRow
+    assert len(stbl) == 3
+    sel = stbl.value >= 20
+    assert list(sel.indices) == [1, 2]
 
 
 # --------------------------------------------------------------------
 # QueryableTable — querying
 # --------------------------------------------------------------------
 
-def test_eq_query(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_eq_query(tbl):
     sel = tbl.signed == False
     assert isinstance(sel, ConstraintSelection)
     assert list(sel.indices) == [0, 1, 2, 3]
 
 
-def test_and_pipeline(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_and_pipeline(tbl):
     val = 123
     smallest = (
         tbl.signed == False
@@ -137,8 +127,7 @@ def test_and_pipeline(lookup_data):
     assert list(smallest.indices) == [0]
 
 
-def test_amp_pipeline(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_amp_pipeline(tbl):
     val = 123
     smallest = (
         (((tbl.signed == False) & tbl.max) >= val) & tbl.prev_max
@@ -146,77 +135,42 @@ def test_amp_pipeline(lookup_data):
     assert list(smallest.indices) == [0]
 
 
-def test_filter_rows_via_iter(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_filter_rows_via_iter(tbl):
     signed_rows = [t for t in tbl if t.signed == True]
     assert len(signed_rows) == 4
     assert all(bool(r.signed) is True for r in signed_rows)
 
 
-def test_ne_query(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_ne_query(tbl):
     sel = tbl.signed != False
     assert list(sel.indices) == [4, 5, 6, 7]
 
 
-def test_lt_query(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_lt_query(tbl):
     sel = tbl.bits < 16
     assert list(sel.indices) == [0, 4]
 
 
-def test_le_query(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_le_query(tbl):
     sel = tbl.bits <= 8
     assert list(sel.indices) == [0, 4]
 
 
-def test_gt_query(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_gt_query(tbl):
     sel = tbl.bits > 8
     assert list(sel.indices) == [1, 2, 3, 5, 6, 7]
 
 
-def test_ge_query(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_ge_query(tbl):
     sel = tbl.bits >= 16
     assert list(sel.indices) == [1, 2, 3, 5, 6, 7]
 
 
-def test_selection_intersection(lookup_data):
-    tbl = TypeLookup.build("TypeLookup", lookup_data)
+def test_selection_intersection(tbl):
     sel1 = tbl.signed == False
     sel2 = tbl.bits >= 16
     combined = sel1 & sel2
     assert list(combined.indices) == [1, 2, 3]
-
-
-# --------------------------------------------------------------------
-# TableCreator
-# --------------------------------------------------------------------
-
-def test_table_creator(lookup_data):
-    creator = TableCreator[TypeLookupRow, TypeLookup](TypeLookup)
-    tbl = creator.build("via_creator", lookup_data)
-    assert isinstance(tbl, TypeLookup)
-    assert tbl.name == "via_creator"
-    assert tbl.row_type is TypeLookupRow
-    assert len(tbl) == 8
-    sel = tbl.signed == False
-    assert list(sel.indices) == [0, 1, 2, 3]
-
-
-def test_table_creator_simple_row():
-    class SimpleTable(QueryableTable[SimpleRow]):
-        @classmethod
-        def get_row_type(cls) -> type[SimpleRow]:
-            return SimpleRow
-
-    creator = TableCreator[SimpleRow, SimpleTable](SimpleTable)
-    tbl = creator.build("simple", [(0, 10), (1, 20), (2, 30)])
-    assert len(tbl) == 3
-    sel = tbl.value >= 20
-    assert list(sel.indices) == [1, 2]
 
 
 # --------------------------------------------------------------------

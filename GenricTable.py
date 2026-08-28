@@ -42,6 +42,10 @@ class TColContainerAdapter(ABC, Generic[TColContainer, TCell]):
     container of type ``TColContainer`` from the raw array data.
     """
 
+    def __init__(self, parent: Table, name: str) -> None:
+        self.parent = parent
+        self.name = name
+
     @abstractmethod
     def init_column(self, ary: np.ndarray, cell_type: type[TCell]) -> TColContainer:
         """Create the column from the structured array."""
@@ -59,18 +63,11 @@ class TColContainerCreator(ABC, Generic[TColContainer]):
 
 
 class NPColAdapter(TColContainerAdapter[np.ndarray, Any]):
-    def __init__(self, parent: Table, name: str):
-        self.name = name
-        self.parent = parent
-
     def init_column(self, ary: np.ndarray, cell_type: type[Any]) -> np.ndarray:
         return ary[self.name]
 
 
 class NPContainerCreator(TColContainerCreator[np.ndarray]):
-    def __init__(self):
-        pass
-
     def get_adapter(self, parent: Table, name: str) -> NPColAdapter:
         return NPColAdapter(parent, name)
 
@@ -91,7 +88,7 @@ class Table[TRow, TCreator: TColContainerCreator]:
         self.row_type = row_type
         self.fields = get_defs_from_rowtype(row_type)
         self.data = np.array(data, dtype=dtype_from_fields(self.fields))
-        self.col_creator = col_a_cre
+        self.col_creator = col_a_cre() if isinstance(col_a_cre, type) else col_a_cre
         self.adapter = self.create_columns()
 
     def create_columns(self) -> Dict[str, TColContainerAdapter]:

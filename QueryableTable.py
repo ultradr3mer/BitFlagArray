@@ -5,7 +5,7 @@ from typing import Any, Literal
 import numpy as np
 import numpy.typing as npt
 
-from GenricTable import Table, NpColDef, TColContainerAdapter, TColContainerCreator
+from GenricTable import Table, TColContainerAdapter, TColContainerCreator
 
 
 #====================================================
@@ -29,10 +29,6 @@ class ConstraintSelection:
         if isinstance(other, ConstraintColumn):
             return other[self]
         return NotImplemented
-
-    def __bool__(self) -> bool:
-        _pending_selections.append(self)
-        return True
 
 
 class ConstraintColumn:
@@ -125,71 +121,42 @@ class ConstraintColCreator(TColContainerCreator[ConstraintColumn]):
 #====================================================
 
 class QueryableTable[TRow](Table[TRow, ConstraintColCreator]):
-    """Table with ConstraintColumn columns for querying.
-
-    Subclass and override ``get_row_type()``::
-
-        class TypeLookup(QueryableTable[TypeLookupRow]):
-            @classmethod
-            def get_row_type(cls) -> type[TypeLookupRow]:
-                return TypeLookupRow
-
-    Then build from data::
-
-        tbl = TypeLookup.build("mytbl", data)
-    """
-
-    _col_creator_cls = ConstraintColCreator
+    def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
+        super().__init__(name, data, row_type, col_a_cre=ConstraintColCreator())
 
 
 #====================================================
 #               DEMO
 #====================================================
+def build_type_table():
+    kind = {'u': False, 'i': True}
+    sizes = [1, 2, 4, 8]
+    types = [np.dtype(f"{k}{s}") for k in kind for s in sizes]
+    rows = []
+    for t in types:
+        s = 1 if t.kind == 'i' else -1
+        rows.append((kind[t.kind], -np.iinfo(t).min, np.iinfo(t).max, np.iinfo(t).bits))
+    return rows
 
 if __name__ == "__main__":
     from typing import NamedTuple
-    from GenricTable import TableCreator
 
     class TypeLookupRow(NamedTuple):
         signed: np.bool
         abs_min: np.uint64
         max: np.uint64
         bits: np.uint8
-        prev_max: np.int64
 
-    class TypeLookup(QueryableTable[TypeLookupRow]):
-        @classmethod
-        def get_row_type(cls) -> type[TypeLookupRow]:
-            return TypeLookupRow
-
-    kind = {'u': False, 'i': True}
-    sizes = [1, 2, 4, 8]
-    types = [np.dtype(f"{k}{s}") for k in kind for s in sizes]
-    rows = []
-    last_max = {-1: -1, 1: -1}
-    for t in types:
-        s = 1 if t.kind == 'i' else -1
-        rows.append((kind[t.kind], -np.iinfo(t).min, np.iinfo(t).max, np.iinfo(t).bits, last_max[s]))
-        last_max[s] = int(np.iinfo(t).max)
-
-    # --- via subclass ---
-    qtbl = TypeLookup.build("TypeLookup", rows)
-    print("subclass ->", qtbl.name, qtbl.dtype, "len:", len(qtbl))
+    qtbl = QueryableTable(name="TypeLookup",data=build_type_table(), row_type=TypeLookupRow)
+    print("direct  ->", qtbl.name, qtbl.dtype, "len:", len(qtbl))
     print("row 0:", qtbl[0])
-
-    # --- via creator ---
-    creator = TableCreator[TypeLookupRow, TypeLookup](TypeLookup)
-    qtbl2 = creator.build("via_creator", rows)
-    print("creator  ->", qtbl2.name, qtbl2.dtype, "len:", len(qtbl2))
 
     sel = qtbl.signed == False
     print("signed == False ->", sel)
 
-    val = 123
+    val = 255
     smallest = (
-        qtbl.signed == False
-        and qtbl.max >= val
-        and qtbl.prev_max < val
+        qtbl.signed == False and qtbl.max >= val
     )
     print("smallest unsigned for 123 ->", smallest)
 
