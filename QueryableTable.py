@@ -106,7 +106,7 @@ CCol = ConstraintColumn
 #               QUERYABLE TABLE
 #====================================================
 
-class QueryableTable[TRow](Table[TRow]):
+class QueryableTable[TRow](Table[TRow, ConstraintColumn]):
     """Table with ConstraintColumn columns for querying.
 
     Subclass and override ``get_row_type()``::
@@ -121,9 +121,9 @@ class QueryableTable[TRow](Table[TRow]):
         tbl = TypeLookup.build("mytbl", data)
     """
 
-    def _init_columns(self) -> None:
-        for name in self._field_names:
-            setattr(self, name, ConstraintColumn(self._ary, name))
+    @classmethod
+    def _make_column(cls, ary: np.ndarray, name: str) -> ConstraintColumn:
+        return ConstraintColumn(ary, name)
 
 
 #====================================================

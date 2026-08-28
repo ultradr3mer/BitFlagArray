@@ -36,15 +36,20 @@ def _dtype_from_fields(fields: list[NpColDef]) -> np.dtype[Any]:
 #               TABLE BASE HIERARCHY
 #====================================================
 
-class Table[TRow](ABC):
+class Table[TRow, TCol](ABC):
     """Base for typed lookup tables backed by a numpy structured array.
 
-    Subclass and override ``get_row_type()`` to bind a row NamedTuple::
+    Subclass and override ``get_row_type()`` to bind a row NamedTuple,
+    and ``_make_column()`` to specify the column wrapper type::
 
-        class UserTable(Table[UserRow]):
+        class UserTable(Table[UserRow, np.ndarray]):
             @classmethod
             def get_row_type(cls) -> type[UserRow]:
                 return UserRow
+
+            @classmethod
+            def _make_column(cls, ary, name) -> np.ndarray:
+                return ary[name]
     """
 
     name: str
@@ -67,12 +72,17 @@ class Table[TRow](ABC):
     def get_row_type(cls) -> type[TRow]:
         """Gibt den Row-Typ dieser konkreten Tabelle zurück."""
 
+    @classmethod
     @abstractmethod
+    def _make_column(cls, ary: np.ndarray, name: str) -> TCol:
+        """Erzeugt eine Spalte aus dem strukturierten Array und dem Feldnamen."""
+
     def _init_columns(self) -> None:
-        """Erzeugt Spalten-Attribute aus ``self._ary``."""
+        for name in self._field_names:
+            setattr(self, name, type(self)._make_column(self._ary, name))
 
     @classmethod
-    def build(cls, name: str, data: npt.ArrayLike) -> "Table[TRow]":
+    def build(cls, name: str, data: npt.ArrayLike) -> "Table[TRow, TCol]":
         """Creator: leitet dtype vom Row-Typ ab, konvertiert Daten, instanziiert."""
         row_type = cls.get_row_type()
         fields = _col_defs_from_rowtype(row_type)
@@ -109,19 +119,19 @@ class Table[TRow](ABC):
         return list(self)
 
 
-class PlainTable[TRow](Table[TRow]):
+class PlainTable[TRow](Table[TRow, np.ndarray]):
     """Table with plain numpy array columns."""
 
-    def _init_columns(self) -> None:
-        for name in self._field_names:
-            setattr(self, name, self._ary[name])
+    @classmethod
+    def _make_column(cls, ary: np.ndarray, name: str) -> np.ndarray:
+        return ary[name]
 
 
 #====================================================
 #               TABLE CREATOR
 #====================================================
 
-class TableCreator[TRow, TTable: Table[TRow]]:
+class TableCreator[TRow, TTable: Table[TRow, Any]]:
     """Generischer Creator für Tabellen.
 
     Hält den Tabellentyp und dessen Row-Typ und erstellt Instanzen::
