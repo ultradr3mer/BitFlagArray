@@ -4,57 +4,16 @@ from typing import NamedTuple
 
 from GenricTable import (
     NpColDef,
-    to_col_defs,
     get_defs_from_rowtype,
-    FieldSpec,
+    dtype_from_fields,
+    NPColAdapter,
+    NPContainerCreator,
     Table,
-    PlainTable,
-    TableCreator,
 )
 
 
 # --------------------------------------------------------------------
-# NpColDef / to_col_defs
-# --------------------------------------------------------------------
-
-def test_to_col_defs_basic():
-    spec: FieldSpec = [
-        ('kind', np.bool), ('abs_min', np.uint64),
-        ('max', np.uint64), ('bits', np.uint8),
-    ]
-    cols = to_col_defs(spec)
-    assert len(cols) == 4
-    assert all(isinstance(c, NpColDef) for c in cols)
-    assert cols[0].name == 'kind'
-    assert cols[0].type == np.dtype(np.bool)
-    assert cols[3].type == np.dtype(np.uint8)
-
-
-def test_to_col_defs_normalizes_dtype():
-    cols = to_col_defs([('x', 'u8'), ('y', 'bool')])
-    assert cols[0].type == np.dtype('u8')
-    assert cols[1].type == np.dtype('bool')
-
-
-# --------------------------------------------------------------------
-# _col_defs_from_rowtype
-# --------------------------------------------------------------------
-
-def test_col_defs_from_rowtype():
-    class MyRow(NamedTuple):
-        kind: np.uint8
-        abs_min: np.uint64
-        max: np.uint64
-        bits: np.uint8
-
-    cols = get_defs_from_rowtype(MyRow)
-    assert len(cols) == 4
-    assert cols[0] == NpColDef('kind', np.dtype(np.uint8))
-    assert cols[1] == NpColDef('abs_min', np.dtype(np.uint64))
-
-
-# --------------------------------------------------------------------
-# Table base / PlainTable
+# NpColDef / get_defs_from_rowtype / dtype_from_fields
 # --------------------------------------------------------------------
 
 class RowType(NamedTuple):
@@ -64,19 +23,42 @@ class RowType(NamedTuple):
     bits: np.uint8
 
 
-class MyPlain(PlainTable[RowType]):
-    @classmethod
-    def get_row_type(cls) -> type[RowType]:
-        return RowType
+def test_col_defs_from_rowtype():
+    cols = get_defs_from_rowtype(RowType)
+    assert len(cols) == 4
+    assert cols[0] == NpColDef('kind', np.dtype(np.uint8))
+    assert cols[1] == NpColDef('abs_min', np.dtype(np.uint64))
+    assert cols[2] == NpColDef('max', np.dtype(np.uint64))
+    assert cols[3] == NpColDef('bits', np.dtype(np.uint8))
 
 
-def test_table_is_abstract():
-    with pytest.raises(TypeError):
-        Table("x", [], RowType)  # type: ignore[abstract]
+def test_np_col_def_repr():
+    col = NpColDef('kind', np.dtype(np.uint8))
+    assert 'kind' in repr(col)
+    assert 'uint8' in repr(col)
 
 
-def test_plain_table_build():
-    tbl = MyPlain.build("test", [(1, 0, 255, 8), (2, 1, 65535, 16)])
+def test_dtype_from_fields():
+    fields = get_defs_from_rowtype(RowType)
+    dt = dtype_from_fields(fields)
+    assert dt.names == ('kind', 'abs_min', 'max', 'bits')
+    assert dt['kind'] == np.dtype(np.uint8)
+    assert dt['max'] == np.dtype(np.uint64)
+
+
+# --------------------------------------------------------------------
+# Table construction
+# --------------------------------------------------------------------
+
+@pytest.fixture
+def tbl():
+    return Table(name="test",
+                 data=[(1, 0, 255, 8), (2, 1, 65535, 16)],
+                 row_type=RowType,
+                 col_a_cre=NPContainerCreator())
+
+
+def test_table_build(tbl):
     assert tbl.name == "test"
     assert tbl.row_type is RowType
     assert len(tbl.fields) == 4
@@ -84,47 +66,82 @@ def test_plain_table_build():
     assert tbl.dtype.names == ('kind', 'abs_min', 'max', 'bits')
 
 
-def test_plain_table_columns_are_arrays():
-    tbl = MyPlain.build("test", [(1, 0, 255, 8)])
+def test_table_empty_data():
+    tbl = Table(name="empty",
+                data=[],
+                row_type=RowType,
+                col_a_cre=NPContainerCreator())
+    assert len(tbl) == 0
+    assert list(tbl) == []
+
+
+def test_table_columns_are_arrays(tbl):
     assert isinstance(tbl.kind, np.ndarray)
     assert tbl.kind.dtype == np.uint8
     assert isinstance(tbl.max, np.ndarray)
+    assert tbl.max.dtype == np.uint64
+    assert tbl.max.tolist() == [255, 65535]
 
 
-def test_plain_table_getitem():
-    tbl = MyPlain.build("test", [(1, 0, 255, 8), (2, 1, 65535, 16)])
+def test_table_adapters(tbl):
+    assert set(tbl.adapter) == {'kind', 'abs_min', 'max', 'bits'}
+    for name, adapter in tbl.adapter.items():
+        assert isinstance(adapter, NPColAdapter)
+        assert adapter.name == name
+        assert adapter.parent is tbl
+
+
+def test_table_field_names(tbl):
+    assert tbl._field_names == ['kind', 'abs_min', 'max', 'bits']
+
+
+def test_table_getitem_int(tbl):
     row = tbl[0]
     assert isinstance(row, RowType)
     assert int(row.kind) == 1
     assert int(row.max) == 255
 
 
-def test_plain_table_iter():
-    tbl = MyPlain.build("test", [(1, 0, 255, 8), (2, 1, 65535, 16)])
+def test_table_getitem_slice_returns_structured_array(tbl):
+    sub = tbl[0:1]
+    assert isinstance(sub, np.ndarray)
+    assert sub.dtype == tbl.dtype
+    assert len(sub) == 1
+
+
+def test_table_iter(tbl):
     rows = list(tbl)
     assert len(rows) == 2
+    assert all(isinstance(r, RowType) for r in rows)
     assert int(rows[1].max) == 65535
 
 
-def test_plain_table_rows_helper():
-    tbl = MyPlain.build("test", [(1, 0, 255, 8)])
+def test_table_rows_helper(tbl):
     rows = tbl.rows()
-    assert len(rows) == 1
+    assert len(rows) == 2
     assert isinstance(rows[0], RowType)
 
 
+def test_table_repr(tbl):
+    assert 'test' in repr(tbl)
+    assert 'len=2' in repr(tbl)
+
+
 # --------------------------------------------------------------------
-# TableCreator
+# Adapter protocol
 # --------------------------------------------------------------------
 
-def test_table_creator():
-    creator = TableCreator[RowType, MyPlain](MyPlain)
-    tbl = creator.build("via_creator", [(1, 0, 255, 8)])
-    assert isinstance(tbl, MyPlain)
-    assert tbl.name == "via_creator"
-    assert tbl.row_type is RowType
-    assert len(tbl) == 1
-    assert int(tbl[0].max) == 255
+def test_adapter_repr(tbl):
+    adapter = tbl.adapter['kind']
+    assert 'kind' in repr(adapter)
+    assert repr(tbl) in repr(adapter)
+
+
+def test_adapter_init_column():
+    adapter = NPColAdapter(parent=None, name='bits')
+    ary = np.array([(1, 2, 3)], dtype=[('kind', 'u1'), ('max', 'u8'), ('bits', 'u1')])
+    col = adapter.init_column(ary, np.uint8)
+    assert col.tolist() == [3]
 
 
 if __name__ == "__main__":
