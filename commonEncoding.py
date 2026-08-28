@@ -4,7 +4,8 @@ from typing import Iterable, Any, List, Tuple, overload
 import numpy as np
 import numpy.typing as npt
 
-from common import get_type_for_array
+from common import get_type_for_array, get_type_for_bit_count, get_as_unsigned, get_as_signed
+
 
 @dataclass(frozen=True)
 class CommonNBitAry:
@@ -91,7 +92,7 @@ def get_bits(value: np.ndarray | int | str, count=None):
     if np.isscalar(value):
         return (value >> bit_range) & 1
     elif isinstance(value, np.ndarray):
-        return (value.reshape((-1, 1)) >> bit_range) & 1
+        return (get_as_signed(value.reshape((-1, 1))) >> bit_range) & 1
     else:
         raise Exception("invalid Value")
 
@@ -193,3 +194,4 @@ def arrange_bits(values, take_indices):
         result = result + (1 << shift_to) * ((from_ary >> shift_from) & 1)
 
     return result
+

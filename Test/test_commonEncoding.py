@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
-
 from commonEncoding import (
     get_bitmask, get_bit_count, get_number, get_bits,
     bits_to_hex, hex_to_bits, arrange_bits,
@@ -111,3 +110,4 @@ def test_arrange_bits_inverts_put_bits():
     arranged = arrange_bits(data, indices)
     back = put_bits(arranged, np.array(indices), 6)
     np.testing.assert_array_equal(back, data.get_array())
+

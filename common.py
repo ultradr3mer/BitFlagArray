@@ -1,8 +1,9 @@
 from argparse import ArgumentError
 from enum import StrEnum
-from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple
+from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload
 
 import numpy as np
+import numpy.typing as npt
 
 T_ex = TypeVar('T_ex', bound=Exception)
 T_ret = TypeVar('T_ret')
@@ -34,7 +35,6 @@ def _get_type(value: int, attr: str):
 
     return exc_to_many_bit.do_raise()
 
-
 def get_type_for_scalar(value: int):
     return _get_type(value, "max")
 
@@ -42,7 +42,66 @@ def get_type_for_bit_count(bit_count: int):
     return _get_type(bit_count, "bits")
 
 def get_type_for_array(ary: np.ndarray | List[Any] | Iterable[Any]):
-    return _get_type(np.max(ary), "max")
+    if isinstance(ary, np.ndarray):
+        return _get_type(np.max(ary), "max")
+    else:
+        return _get_type(max(ary), "max")
+
+@overload
+def get_as_signed(a: np.dtype[Any]) -> np.dtype[Any]: ...
+
+@overload
+def get_as_signed(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
+
+
+def get_as_signed(
+    a: npt.ArrayLike | np.dtype[Any],
+) -> np.ndarray | np.dtype[Any]:
+    if isinstance(a, np.dtype):
+        if a.kind == "i":
+            return a
+        if a.kind != "u":
+            raise TypeError("Expected an integer dtype")
+
+        return np.dtype(f"i{a.itemsize}")
+
+    a = np.asarray(a)
+
+    if a.dtype.kind == "i":
+        return a
+    if a.dtype.kind != "u":
+        raise TypeError("Expected an integer array")
+
+    return a.astype(np.dtype(f"i{a.dtype.itemsize}"))
+
+
+
+@overload
+def get_as_unsigned(a: np.dtype[Any]) -> np.dtype[Any]: ...
+
+@overload
+def get_as_unsigned(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
+
+
+def get_as_unsigned(
+    a: npt.ArrayLike | np.dtype[Any],
+) -> np.ndarray | np.dtype[Any]:
+    if isinstance(a, np.dtype):
+        if a.kind == "u":
+            return a
+        if a.kind != "i":
+            raise TypeError("Expected an integer dtype")
+
+        return np.dtype(f"u{a.itemsize}")
+
+    a = np.asarray(a)
+
+    if a.dtype.kind == "u":
+        return a
+    if a.dtype.kind != "i":
+        raise TypeError("Expected an integer array")
+
+    return a.astype(np.dtype(f"u{a.dtype.itemsize}"))
 
 
 def iter_bits(data):
