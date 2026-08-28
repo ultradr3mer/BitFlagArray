@@ -79,6 +79,12 @@ T_constr_item = TypeVar('T_constr_item', bound=Any)
 
 Undefined = Literal
 
+# Stack for the `and`-trick: `bool(selection)` (called by `and`) pushes the
+# selection here; the next comparison on a column pops it and applies it as a
+# restriction. Enables: `selection and column >= value`.
+_pending_selections: list["ConstraintSelection"] = []
+
+
 @dataclass(frozen=True)
 class ConstraintSelection:
     indices: npt.NDArray[np.intp]
@@ -93,10 +99,11 @@ class ConstraintSelection:
         return NotImplemented
 
     def __bool__(self) -> bool:
-        raise TypeError(
-            "ConstraintSelection cannot be used with 'and'; "
-            "use '&' or an explicit filtering method."
-        )
+        # Called by `and`. Stash self so the following column comparison can
+        # pick it up as a restriction. Returning True makes `and` evaluate and
+        # return its right-hand side.
+        _pending_selections.append(self)
+        return True
 
 import operator
 
@@ -137,13 +144,19 @@ class ConstraintColumn(Generic[T_constr_item]):
         return self.column[key]
 
     def _compare(self, value: object, op) -> ConstraintSelection:
+        # `and`-trick: if a pending selection was stashed by `__bool__`,
+        # restrict this column to it before comparing.
+        col = self
+        if _pending_selections:
+            col = col[_pending_selections.pop()]
+
         if value is Undefined:
-            mask = np.ones(len(self.column), dtype=bool)
+            mask = np.ones(len(col.column), dtype=bool)
         else:
-            mask = op(self.column, value)
+            mask = op(col.column, value)
 
         local = np.flatnonzero(mask)
-        return ConstraintSelection(self._resolve(local))
+        return ConstraintSelection(col._resolve(local))
 
     def __eq__(self, value: object) -> ConstraintSelection:
         return self._compare(value, operator.eq)
@@ -172,6 +185,9 @@ T_tbl_impl = TypeVar('T_tbl_impl', bound="LookupTable")
 CCol = ConstraintColumn
 
 class LookupTable(Generic[T_tbl_impl]):
+    def __init__(self):
+        self._array = None
+
     @classmethod
     def _field_names(cls) -> list[str]:
         hints = get_type_hints(cls)
@@ -203,7 +219,7 @@ class LookupTable(Generic[T_tbl_impl]):
         return np.dtype(fields)
 
     @classmethod
-    def build(cls, array: npt.ArrayLike) -> "LookupTable":
+    def build(cls, array: npt.ArrayLike):
         dtype = cls.dtype()
         ary = np.asarray(array, dtype=dtype)
 
@@ -219,6 +235,35 @@ class LookupTable(Generic[T_tbl_impl]):
         ary = np.asarray(array, dtype=cls.dtype())
         return tuple(ary[name] for name in cls._field_names())
 
+    @classmethod
+    def _row_type(cls):
+        cached = cls.__dict__.get("_Row")
+        if cached is not None:
+            return cached
+        Row = NamedTuple(
+            f"{cls.__name__}Row",
+            [(name, Any) for name in cls._field_names()],
+        )
+        cls._Row = Row
+        return Row
+
+    def __iter__(self):
+        Row = type(self)._row_type()
+        names = type(self)._field_names()
+        for rec in self._array:
+            yield Row(*[rec[n] for n in names])
+
+    def __getitem__(self, key):
+        if isinstance(key, (int, np.integer)):
+            Row = type(self)._row_type()
+            names = type(self)._field_names()
+            rec = self._array[key]
+            return Row(*[rec[n] for n in names])
+        return self._array[key]
+
+    def __len__(self):
+        return len(self._array)
+
 
 
 #====================================================
@@ -226,12 +271,12 @@ class LookupTable(Generic[T_tbl_impl]):
 #====================================================
 
 
-
 class TypeLookup2(LookupTable):
     signed: CCol[np.bool]
     abs_min: CCol[np.uint64]
     max: CCol[np.uint64]
     bits: CCol[np.uint64]
+    prev_max: CCol[np.int64]
 
 
 
@@ -243,25 +288,46 @@ def build_tlook():
         for k in kind
         for s in sizes
     ])
-    return TypeLookup2.build(
-            [
-                (
-                    kind[t.kind],
-                    -np.iinfo(t).min,
-                    np.iinfo(t).max,
-                    np.iinfo(t).bits,
-                )
-                for t in types
-            ]
-        )
+
+    rows = []
+    last_max = {-1: -1, 1: -1}
+    for t in types:
+        s = 1 if t.kind == 'i' else -1
+        rows.append((
+            kind[t.kind],
+            -np.iinfo(t).min,
+            np.iinfo(t).max,
+            np.iinfo(t).bits,
+            last_max[s],
+        ))
+        last_max[s] = int(np.iinfo(t).max)
+
+    return TypeLookup2.build(rows)
 
 
 _LOOKUP_TBL = build_tlook()
-_sel = _LOOKUP_TBL.signed == False
-print(_sel)
-print((_LOOKUP_TBL.signed == None & _LOOKUP_TBL.max) > 123)
-print((_sel & _LOOKUP_TBL.max) <= 123)
-print((_sel & _LOOKUP_TBL.max) < 123)
+
+val = 123
+
+# `and`-trick form: no parens needed, `and` binds looser than comparisons.
+smallest = (
+    _LOOKUP_TBL.signed == False
+    and _LOOKUP_TBL.max >= val
+    and _LOOKUP_TBL.prev_max < val
+)
+print("and-trick ->", smallest)
+
+rows = [t for t in _LOOKUP_TBL if t.signed == True]
+print("signed rows ->", rows)
+print("row 0 ->", _LOOKUP_TBL[0])
+print("len ->", len(_LOOKUP_TBL))
+
+# `&`-pipeline form (explicit, no bool magic): same result.
+smallest_alt = (
+    (((_LOOKUP_TBL.signed == False) & _LOOKUP_TBL.max) >= val)
+    & _LOOKUP_TBL.prev_max
+) < val
+print("pipeline  ->", smallest_alt)
 
 def _get_type(value: int, attr: str, signed: bool = False):
     # for dtype in _S_INT_TYPES if signed else _U_INT_TYPES:
