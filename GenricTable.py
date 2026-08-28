@@ -1,4 +1,4 @@
-from typing import NamedTuple, Any, cast
+from typing import NamedTuple, Any, get_type_hints
 import numpy as np
 import numpy.typing as npt
 
@@ -16,6 +16,11 @@ def to_col_defs(spec: FieldSpec) -> list[NpColDef]:
     return [NpColDef(name, np.dtype(dt)) for name, dt in spec]
 
 
+def _col_defs_from_rowtype(rowtype: type) -> list[NpColDef]:
+    hints = get_type_hints(rowtype)
+    return [NpColDef(name, np.dtype(hints[name])) for name in rowtype._fields]
+
+
 class TableType:
     """Factory + metadata for a dynamically-built lookup table.
 
@@ -25,14 +30,14 @@ class TableType:
 
     __slots__ = ("_dtype", "_row_type", "_tbl_type", "_fields")
 
-    def __init__(self, name: str, fields: list[NpColDef]):
+    def __init__(self, name: str, fields: list[NpColDef], rowtype: type | None = None):
         self._fields = fields
         self._dtype = np.dtype([(f.name, f.type) for f in fields])
 
-        row_fields: list[tuple[str, type[Any]]] = [
-            (f.name, f.type.type) for f in fields
-        ]
-        self._row_type = NamedTuple(f"{name}Row", row_fields)
+        self._row_type = rowtype if rowtype is not None else NamedTuple(
+            f"{name}Row",
+            [(f.name, f.type.type) for f in fields],
+        )
 
         table_fields: list[tuple[str, type[Any]]] = [
             (f.name, npt.NDArray[Any]) for f in fields
@@ -67,20 +72,47 @@ class TableType:
         return [self.row(ary, i) for i in range(len(ary))]
 
 
-def create_table_type(name: str, fields: list[NpColDef]) -> TableType:
-    return TableType(name, fields)
+def create_table_type(
+    name: str,
+    fields: list[NpColDef] | None = None,
+    *,
+    rowtype: type | None = None,
+) -> TableType:
+    if rowtype is not None:
+        fields = _col_defs_from_rowtype(rowtype)
+    elif fields is None:
+        raise TypeError("create_table_type needs either `fields` or `rowtype`")
+    return TableType(name, fields, rowtype)
+
+
+class RowType(NamedTuple):
+    kind: np.uint8
+    abs_min: np.uint64
+    max: np.uint64
+    bits: np.uint8
+
+
+Other = create_table_type(name="Other", rowtype=RowType)
+print("Other dtype:", Other.dtype)
+print("Other row_type:", Other.row_type)
+
+_tbl = Other.build([
+    (1, 0, 255, 8),
+    (2, 1, 65535, 16),
+])
+print("Other table ->", _tbl)
+print("Other kind  ->", _tbl.kind)
+
+_ary = np.asarray([(1, 0, 255, 8)], dtype=Other.dtype)
+print("Other row 0 ->", Other.row(_ary, 0))
 
 
 _test_spec: FieldSpec = [
     ('kind', np.bool), ('abs_min', np.uint64),
     ('max', np.uint64), ('bits', np.uint8),
 ]
-_col_defs = to_col_defs(_test_spec)
-print(_col_defs)
-
-MyTypes = create_table_type("MyTypes", _col_defs)
-print(MyTypes)
-print("dtype:", MyTypes.dtype)
+MyTypes = create_table_type("MyTypes", to_col_defs(_test_spec))
+print("MyTypes dtype:", MyTypes.dtype)
 
 rows_data = [
     (True, 0,   255,       8),
@@ -88,22 +120,8 @@ rows_data = [
     (True, 2,  4294967295, 32),
 ]
 tbl = MyTypes.build(rows_data)
-print("table ->", tbl)
-print("kind  ->", tbl.kind)
-print("max   ->", tbl.max)
-print("bits  ->", tbl.bits)
+print("MyTypes table ->", tbl)
 
 ary = np.asarray(rows_data, dtype=MyTypes.dtype)
-print("row 0 ->", MyTypes.row(ary, 0))
-print("row 1 ->", MyTypes.row(ary, 1))
-
 for r in MyTypes.rows(ary):
     print("  row ->", r)
-
-for i in range(len(tbl.kind)):
-    print(f"  manual row {i} ->", MyTypes.row_type(
-        kind=tbl.kind[i],
-        abs_min=tbl.abs_min[i],
-        max=tbl.max[i],
-        bits=tbl.bits[i],
-    ))
