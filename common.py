@@ -1,7 +1,5 @@
-from argparse import ArgumentError
 from dataclasses import dataclass
-from enum import StrEnum
-from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal
+from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal, TYPE_CHECKING, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -157,10 +155,10 @@ class ConstraintColumn(Generic[T_constr_item]):
         local = np.flatnonzero(mask)
         return ConstraintSelection(col._resolve(local))
 
-    def __eq__(self, value: object) -> ConstraintSelection:
+    def __eq__(self, value: object) -> ConstraintSelection:  # type: ignore[override]
         return self._compare(value, operator.eq)
 
-    def __ne__(self, value: object) -> ConstraintSelection:
+    def __ne__(self, value: object) -> ConstraintSelection:  # type: ignore[override]
         return self._compare(value, operator.ne)
 
     def __lt__(self, value: object) -> ConstraintSelection:
@@ -179,12 +177,13 @@ class ConstraintColumn(Generic[T_constr_item]):
         return id(self)
 
 
-T_tbl_impl = TypeVar('T_tbl_impl', bound="LookupTable")
-
 CCol = ConstraintColumn
 
 # dtype spec: list of (name, dtype) tuples.
 TFieldSpec = list[tuple[str, Any]]
+
+# Module-level cache for generated row NamedTuples per LookupTable subclass.
+_row_types: dict[type, type] = {}
 
 
 class LookupTable:
@@ -200,10 +199,13 @@ class LookupTable:
     """
 
     _fields_spec: TFieldSpec = []
-    _array: npt.NDArray[Any]
+    _array: npt.NDArray[Any] | None
 
     def __init__(self):
         self._array = None
+
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> CCol: ...
 
     # ---- dtype-first machinery ----
 
@@ -251,15 +253,15 @@ class LookupTable:
         return tuple(ary[name] for name in cls._field_names())
 
     @classmethod
-    def _row_type(cls):
-        cached = cls.__dict__.get("_Row")
+    def _row_type(cls) -> type:
+        cached = _row_types.get(cls)
         if cached is not None:
             return cached
         Row = NamedTuple(
             f"{cls.__name__}Row",
             [(name, Any) for name in cls._field_names()],
         )
-        cls._Row = Row
+        _row_types[cls] = Row
         return Row
 
     def __iter__(self):
@@ -284,16 +286,101 @@ class LookupTable:
 #====================================================
 #                   TYPE DETECTION
 #====================================================
+T_cols = TypeVar('T_cols', bound=Any)
 
+T_col_ary_item = T_cols # TypeVar('T_col_ary_item', bound=Any)
+type T_cols_ary[T_cols] = npt.NDArray[T_cols]
+T_col_scl_item = T_cols # TypeVar('T_col_scl_item', bound=np.ScalarType)
+type T_cols_item[T_col_scl_item] = T_col_scl_item
 
-class TypeLookup2(LookupTable[[
-    ('signed',   np.bool),
-    ('abs_min',  np.uint64),
-    ('max',      np.uint64),
-    ('bits',     np.uint8),
-    ('prev_max', np.int64),
-]]):
+type T_cols_ary_or_item[T_cols] = T_cols_ary[T_cols] | T_cols_item[T_cols]
+
+tbl_bool = TypeVar('tbl_bool', bound=T_cols_ary_or_item[np.bool])
+tbl_uint64 = TypeVar('tbl_uint64', bound=T_cols_ary_or_item[np.uint64])
+tbl_uint8 = TypeVar('tbl_uint8', bound=T_cols_ary_or_item[np.uint8])
+
+# T_contain = TypeVar('T_contain', bound=npt.NDArray |np.ScalarType)
+type T_ary = npt.NDArray
+type T_cols_of_container[T_contain, T_cols] = T_contain[T_cols]
+# def try1():
+
+class TblAndColumn(NamedTuple, Generic[tbl_bool,tbl_uint64,tbl_uint8]):
+    kind: tbl_bool
+    abs_min: tbl_uint64
+    max: tbl_uint64
+    bits: tbl_uint8
+
+class MyTable(TblAndColumn[npt.NDArray[np.bool],npt.NDArray[np.uint64],npt.NDArray[np.uint8]]):
     pass
+
+class MyRow(TblAndColumn[np.bool,np.uint64,np.uint8]):
+    pass
+
+
+test_tbl = MyTable(kind=np.array([True]), abs_min=np.array([1]), max=np.array([1]), bits=np.array([1]))
+
+print(test_tbl)
+
+test_row = MyRow(kind=True, abs_min=1, max=1, bits=1)
+
+print(test_row)
+
+
+#try2
+#
+# T_cols = TypeVar('T_cols', bound=Tuple[Any, ...])
+# T_col_container = TypeVar('T_col_container', bound=npt.NDArray|np.ScalarType)
+#
+# # Skeleton for generic field type later
+# class Skeleton(NamedTuple, Generic[T_col_container]):
+#     pass
+#
+# T_skeleton = TypeVar('T_skeleton', bound=Skeleton[npt.NDArray|np.ScalarType])
+#
+#
+# # Field definitions for generic field type later
+# class TblAndColumn(Skeleton[T_col_container]):
+#     kind: T_col_container[np.bool]
+#     abs_min: T_col_container[np.uint64]
+#     max: T_col_container[np.uint64]
+#     bits: T_col_container[np.uint8]
+#
+#
+# # Table type for forwarding fieldypes to table and item
+# class TableType(Generic[T_skeleton], T_skeleton[np.ndarray]):
+#     pass
+#
+#     def __iter__(self) -> Iterable[T_skeleton[np.ScalarType]]:
+#         pass
+#
+#
+# # proper type
+# class MyTable(TableType[TblAndColumn]):
+#     pass
+
+
+ttest = np.dtype([
+('kind', np.bool),
+('abs_min', np.uint64),
+('max', np.uint64),
+('bits', np.uint8),
+],)
+
+# class ConstructionFrame(Generic[[
+# ('kind', np.bool),
+# ('abs_min', np.uint64),
+# ('max', np.uint64),
+# ('bits', np.uint8),
+# ]]):
+#
+# class TypeLookup2(LookupTable[[
+#     ('signed',   np.bool),
+#     ('abs_min',  np.uint64),
+#     ('max',      np.uint64),
+#     ('bits',     np.uint8),
+#     ('prev_max', np.int64),
+# ]]):
+#     pass
 
 
 
