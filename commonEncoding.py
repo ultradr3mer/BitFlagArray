@@ -30,14 +30,8 @@ def get_bit_count(value: int | np.unsignedinteger):
     return int(value).bit_length()
 
 
-
-
 def get_bitmask(length, start=0):
     return ((1 << int(length)) - 1) << int(start)
-    # result = 0
-    # for i in range(length):
-    #     result |= 1 << i
-    # return result
 
 
 def trim_leading_zero(bits: List | np.array):

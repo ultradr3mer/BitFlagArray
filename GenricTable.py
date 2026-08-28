@@ -85,12 +85,12 @@ class Table[TRow, TCreator: TColContainerCreator]:
     def __init__(self,
                  name: str,
                  data: npt.ArrayLike,
-                 row_type: type[TRow],
+                 row_type: Type[TRow],
                  col_a_cre: Type[TCreator] | TCreator):
         self.name = name
         self.row_type = row_type
         self.fields = get_defs_from_rowtype(row_type)
-        self.data = np.array(data, dtype=dtype_from_fields(self.fields))
+        self.data = np.array(data, dtype=row_type)
         self.col_creator = col_a_cre
         self.adapter = self.create_columns()
 
@@ -113,12 +113,9 @@ class Table[TRow, TCreator: TColContainerCreator]:
 
     def __iter__(self):
         for rec in self.data:
-            yield self.row_type(**{n: rec[n] for n in self.row_type._fields})
+            yield red # RowType(*rec)
 
     def __getitem__(self, key):
-        if isinstance(key, (int, np.integer)):
-            rec = self.data[key]
-            return self.row_type(**{n: rec[n] for n in self.row_type._fields})
         return self.data[key]
 
     def __len__(self):
