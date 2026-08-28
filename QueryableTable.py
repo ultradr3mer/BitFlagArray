@@ -1,17 +1,20 @@
+import operator
 from dataclasses import dataclass
-from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal, TYPE_CHECKING, Tuple
+from typing import TypeVar, Generic, Any, NamedTuple, Literal, get_type_hints
 
 import numpy as np
 import numpy.typing as npt
 
+from GenricTable import TableType, NpColDef, _col_defs_from_rowtype
 
-# ====================================================
-#                   QUERYABLE TABLE
-# ====================================================
 
-T_constr_item = TypeVar('T_constr_item', bound=Any)
+#====================================================
+#               QUERY INFRASTRUCTURE
+#====================================================
 
 Undefined = Literal
+
+T_constr_item = TypeVar('T_constr_item', bound=Any)
 
 # Stack for the `and`-trick: `bool(selection)` (called by `and`) pushes the
 # selection here; the next comparison on a column pops it and applies it as a
@@ -33,15 +36,13 @@ class ConstraintSelection:
         return NotImplemented
 
     def __bool__(self) -> bool:
-        # Called by `and`. Stash self so the following column comparison can
-        # pick it up as a restriction. Returning True makes `and` evaluate and
-        # return its right-hand side.
         _pending_selections.append(self)
         return True
 
-import operator
 
 class ConstraintColumn(Generic[T_constr_item]):
+    __slots__ = ("table", "column", "parent_indices")
+
     def __init__(
         self,
         data: npt.NDArray[T_constr_item],
@@ -55,18 +56,12 @@ class ConstraintColumn(Generic[T_constr_item]):
             self.table = data
             self.parent_indices = _parent_indices
             return
-
-        if selector is None:
-            self.column = data
-        else:
-            self.column = data[selector]
+        self.column = data if selector is None else data[selector]
         self.table = data
         self.parent_indices = None
 
     def _resolve(self, local_indices: npt.NDArray[np.intp]) -> npt.NDArray[np.intp]:
-        if self.parent_indices is None:
-            return local_indices
-        return self.parent_indices[local_indices]
+        return local_indices if self.parent_indices is None else self.parent_indices[local_indices]
 
     def __getitem__(self, key):
         if isinstance(key, ConstraintSelection):
@@ -78,19 +73,14 @@ class ConstraintColumn(Generic[T_constr_item]):
         return self.column[key]
 
     def _compare(self, value: object, op) -> ConstraintSelection:
-        # `and`-trick: if a pending selection was stashed by `__bool__`,
-        # restrict this column to it before comparing.
         col = self
         if _pending_selections:
             col = col[_pending_selections.pop()]
-
         if value is Undefined:
             mask = np.ones(len(col.column), dtype=bool)
         else:
             mask = op(col.column, value)
-
-        local = np.flatnonzero(mask)
-        return ConstraintSelection(col._resolve(local))
+        return ConstraintSelection(col._resolve(np.flatnonzero(mask)))
 
     def __eq__(self, value: object) -> ConstraintSelection:  # type: ignore[override]
         return self._compare(value, operator.eq)
@@ -116,46 +106,100 @@ class ConstraintColumn(Generic[T_constr_item]):
 
 CCol = ConstraintColumn
 
-# dtype spec: list of (name, dtype) tuples.
-TFieldSpec = list[tuple[str, Any]]
 
-# Module-level cache for generated row NamedTuples per LookupTable subclass.
-_row_types: dict[type, type] = {}
+#====================================================
+#               QUERYABLE TABLE
+#====================================================
+
+class QueryableTableType(TableType):
+    """TableType that builds QueryableTable instances with ConstraintColumn columns."""
+
+    def build(self, data: npt.ArrayLike) -> "QueryableTable":
+        ary = np.asarray(data, dtype=self._dtype)
+        return QueryableTable(ary, self._fields, self._row_type)
 
 
 class QueryableTable:
-    """Base for dtype-first lookup tables.
+    """A built queryable table with ConstraintColumn columns.
 
-    Subclass via::
-
-        class MyTable(LookupTable[[
-            ('signed', np.bool),
-            ('max',    np.uint64),
-        ]]):
-            pass
+    Created via ``QueryableTableType.build(data)`` — not instantiated directly.
     """
 
-    #Inherit Generic table
-
-    def __init__(self):
-        self._array = None
-
-    @classmethod
-    def _row_type(cls) -> type:
-        cached = _row_types.get(cls)
-        #TODO
-        pass
+    def __init__(self, ary: np.ndarray, fields: list[NpColDef], row_type: type):
+        self._ary = ary
+        self._fields = fields
+        self._row_type = row_type
+        for f in fields:
+            setattr(self, f.name, ConstraintColumn(ary, f.name))
 
     def __iter__(self):
-        # TODO
-        pass
+        for rec in self._ary:
+            yield self._row_type(**{f.name: rec[f.name] for f in self._fields})
 
     def __getitem__(self, key):
-        # TODO
-        pass
+        if isinstance(key, (int, np.integer)):
+            rec = self._ary[key]
+            return self._row_type(**{f.name: rec[f.name] for f in self._fields})
+        return self._ary[key]
 
     def __len__(self):
-        # TODO
-        pass
+        return len(self._ary)
+
+    @property
+    def dtype(self) -> np.dtype[Any]:
+        return self._ary.dtype
+
+    @property
+    def row_type(self) -> type:
+        return self._row_type
+
+    def rows(self) -> list[Any]:
+        return list(self)
 
 
+
+
+
+if __name__ == "__main__":
+    class TypeLookupRow(NamedTuple):
+        signed: np.bool
+        abs_min: np.uint64
+        max: np.uint64
+        bits: np.uint8
+        prev_max: np.int64
+
+    kind = {'u': False, 'i': True}
+    sizes = [1, 2, 4, 8]
+    types = [np.dtype(f"{k}{s}") for k in kind for s in sizes]
+    rows = []
+    last_max = {-1: -1, 1: -1}
+    for t in types:
+        s = 1 if t.kind == 'i' else -1
+        rows.append((kind[t.kind], -np.iinfo(t).min, np.iinfo(t).max, np.iinfo(t).bits, last_max[s]))
+        last_max[s] = int(np.iinfo(t).max)
+
+    TypeLookup = create_queryable_table("TypeLookup", rowtype=TypeLookupRow)
+    qtbl = TypeLookup.build(rows)
+
+    print("dtype:", qtbl.dtype)
+    print("len:", len(qtbl))
+    print("row 0:", qtbl[0])
+
+    sel = qtbl.signed == False
+    print("signed == False ->", sel)
+
+    val = 123
+    smallest = (
+        qtbl.signed == False
+        and qtbl.max >= val
+        and qtbl.prev_max < val
+    )
+    print("smallest unsigned for 123 ->", smallest)
+
+    smallest_alt = (
+        (((qtbl.signed == False) & qtbl.max) >= val) & qtbl.prev_max
+    ) < val
+    print("pipeline ->", smallest_alt)
+
+    signed_rows = [t for t in qtbl if t.signed == True]
+    print("signed rows:", signed_rows)
