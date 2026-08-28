@@ -1,20 +1,11 @@
 import operator
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Literal, get_type_hints, TYPE_CHECKING
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
 
-from GenricTable import NpColDef, to_col_defs, _col_defs_from_rowtype, FieldSpec
-
-
-#====================================================
-#               DTYPE HELPERS
-#====================================================
-
-def _dtype_from_rowtype(rowtype: type) -> np.dtype[Any]:
-    return np.dtype([(c.name, c.type) for c in _col_defs_from_rowtype(rowtype)])
+from GenricTable import Table, NpColDef
 
 
 #====================================================
@@ -112,88 +103,23 @@ CCol = ConstraintColumn
 
 
 #====================================================
-#               TABLE HIERARCHY
+#               QUERYABLE TABLE
 #====================================================
 
-class Table[TRow](ABC):
-    """Base for typed lookup tables backed by a numpy structured array.
+class QueryableTable[TRow](Table[TRow]):
+    """Table with ConstraintColumn columns for querying.
 
-    Subclass and override ``get_row_type()`` to bind a row NamedTuple::
+    Subclass and override ``get_row_type()``::
 
-        class UserTable(Table[UserRow]):
+        class TypeLookup(QueryableTable[TypeLookupRow]):
             @classmethod
-            def get_row_type(cls) -> type[UserRow]:
-                return UserRow
+            def get_row_type(cls) -> type[TypeLookupRow]:
+                return TypeLookupRow
 
     Then build from data::
 
-        tbl = UserTable.build(data)
+        tbl = TypeLookup.build("mytbl", data)
     """
-
-    def __init__(self, ary: np.ndarray) -> None:
-        self._ary = ary
-        self._init_columns()
-
-    @classmethod
-    @abstractmethod
-    def get_row_type(cls) -> type[TRow]:
-        """Return the row NamedTuple type for this table."""
-
-    @abstractmethod
-    def _init_columns(self) -> None:
-        """Create column attributes from ``self._ary``."""
-
-    @classmethod
-    def build(cls, data: npt.ArrayLike) -> "Table[TRow]":
-        """Creator: derive dtype from row type, convert data, instantiate."""
-        row_type = cls.get_row_type()
-        dtype = _dtype_from_rowtype(row_type)
-        ary = np.asarray(data, dtype=dtype)
-        return cls(ary)
-
-    @property
-    def dtype(self) -> np.dtype[Any]:
-        return self._ary.dtype
-
-    @property
-    def row_type(self) -> type:
-        return type(self).get_row_type()
-
-    @property
-    def _field_names(self) -> list[str]:
-        return list(type(self).get_row_type()._fields)
-
-    def __iter__(self):
-        row_type = type(self).get_row_type()
-        names = row_type._fields
-        for rec in self._ary:
-            yield row_type(**{n: rec[n] for n in names})
-
-    def __getitem__(self, key):
-        if isinstance(key, (int, np.integer)):
-            row_type = type(self).get_row_type()
-            names = row_type._fields
-            rec = self._ary[key]
-            return row_type(**{n: rec[n] for n in names})
-        return self._ary[key]
-
-    def __len__(self):
-        return len(self._ary)
-
-    def rows(self) -> list[Any]:
-        return list(self)
-
-
-class PlainTable[TRow](Table[TRow]):
-    """Table with plain numpy array columns."""
-
-    def _init_columns(self) -> None:
-        for name in self._field_names:
-            setattr(self, name, self._ary[name])
-
-
-class QueryableTable[TRow](Table[TRow]):
-    """Table with ConstraintColumn columns for querying."""
 
     def _init_columns(self) -> None:
         for name in self._field_names:
@@ -201,33 +127,13 @@ class QueryableTable[TRow](Table[TRow]):
 
 
 #====================================================
-#               DYNAMIC FACTORY
-#====================================================
-
-def create_table(
-    name: str,
-    row_type: type,
-    *,
-    queryable: bool = True,
-) -> type[Table[Any]]:
-    """Dynamically create a Table subclass for the given row type.
-
-    Usage::
-
-        UserTable = create_table("UserTable", UserRow)
-        tbl = UserTable.build(data)
-    """
-    base = QueryableTable if queryable else PlainTable
-    return type(name, (base,), {
-        "get_row_type": classmethod(lambda cls: row_type),
-    })
-
-
-#====================================================
 #               DEMO
 #====================================================
 
 if __name__ == "__main__":
+    from typing import NamedTuple
+    from GenricTable import TableCreator
+
     class TypeLookupRow(NamedTuple):
         signed: np.bool
         abs_min: np.uint64
@@ -235,14 +141,10 @@ if __name__ == "__main__":
         bits: np.uint8
         prev_max: np.int64
 
-    # --- via subclass ---
     class TypeLookup(QueryableTable[TypeLookupRow]):
         @classmethod
         def get_row_type(cls) -> type[TypeLookupRow]:
             return TypeLookupRow
-
-    # --- via factory ---
-    TypeLookupDyn = create_table("TypeLookupDyn", TypeLookupRow, queryable=True)
 
     kind = {'u': False, 'i': True}
     sizes = [1, 2, 4, 8]
@@ -254,12 +156,15 @@ if __name__ == "__main__":
         rows.append((kind[t.kind], -np.iinfo(t).min, np.iinfo(t).max, np.iinfo(t).bits, last_max[s]))
         last_max[s] = int(np.iinfo(t).max)
 
-    qtbl = TypeLookup.build(rows)
-    print("subclass ->", qtbl.dtype, "len:", len(qtbl))
+    # --- via subclass ---
+    qtbl = TypeLookup.build("TypeLookup", rows)
+    print("subclass ->", qtbl.name, qtbl.dtype, "len:", len(qtbl))
     print("row 0:", qtbl[0])
 
-    qtbl2 = TypeLookupDyn.build(rows)
-    print("factory  ->", qtbl2.dtype, "len:", len(qtbl2))
+    # --- via creator ---
+    creator = TableCreator[TypeLookupRow, TypeLookup](TypeLookup)
+    qtbl2 = creator.build("via_creator", rows)
+    print("creator  ->", qtbl2.name, qtbl2.dtype, "len:", len(qtbl2))
 
     sel = qtbl.signed == False
     print("signed == False ->", sel)
@@ -279,12 +184,3 @@ if __name__ == "__main__":
 
     signed_rows = [t for t in qtbl if t.signed == True]
     print("signed rows:", len(signed_rows))
-
-    # --- plain table ---
-    class PlainLookup(PlainTable[TypeLookupRow]):
-        @classmethod
-        def get_row_type(cls) -> type[TypeLookupRow]:
-            return TypeLookupRow
-
-    ptbl = PlainLookup.build(rows)
-    print("plain ->", type(ptbl.max), ptbl.max)
