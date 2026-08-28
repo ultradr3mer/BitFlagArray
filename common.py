@@ -71,10 +71,9 @@ class AccessibleAry(Generic[T_item]):
     def extend(self, param):
         self.inner.extend(param)
 
-
-#====================================================
-#                   TYPE DETECTION
-#====================================================
+# ====================================================
+#                   QUERYABLE TABLE
+# ====================================================
 
 T_constr_item = TypeVar('T_constr_item', bound=Any)
 
@@ -95,17 +94,22 @@ class ConstraintSelection:
 import operator
 
 class ConstraintColumn(Generic[T_constr_item]):
-    def __init__(self, inner: npt.NDArray[T_constr_item]):
-        self.inner = inner
+    def __init__(self, data: npt.NDArray[T_constr_item], selector: str | None = None):
+        if selector is None:
+            self.column = data
+            self.table = data
+        else:
+            self.column = data[selector]
+            self.table = data
 
     def __getitem__(self, key):
-        return self.inner[key]
+        return self.column[key]
 
     def _compare(self, value: object, op) -> ConstraintSelection:
         if value is Undefined:
-            mask = np.ones(len(self.inner), dtype=bool)
+            mask = np.ones(len(self.column), dtype=bool)
         else:
-            mask = op(self.inner, value)
+            mask = op(self.column, value)
 
         return ConstraintSelection(np.flatnonzero(mask))
 
@@ -128,7 +132,7 @@ class ConstraintColumn(Generic[T_constr_item]):
         return self._compare(value, operator.ge)
 
 
-T_tbl_impl = TypeVar('T_tbl_impl')
+T_tbl_impl = TypeVar('T_tbl_impl', bound=NamedTuple)
 
 CCol = ConstraintColumn
 
@@ -156,12 +160,12 @@ class LookupTable(NamedTuple, Generic[T_tbl_impl]):
         return np.dtype(fields)
 
     @classmethod
-    def build(cls, array: npt.ArrayLike):
+    def build(cls, array: npt.ArrayLike) -> T_tbl_impl:
         dtype = cls.dtype()
         ary = np.asarray(array, dtype=dtype)
 
         return cls(
-            *(CCol(ary[name]) for name in cls._fields)
+            *(CCol(ary,name) for name in cls._fields)
         )
 
     @classmethod
@@ -172,67 +176,54 @@ class LookupTable(NamedTuple, Generic[T_tbl_impl]):
 
 
 
+#====================================================
+#                   TYPE DETECTION
+#====================================================
+
+
+
 class TypeLookup2(LookupTable):
     signed: CCol[np.bool]
     abs_min: CCol[np.uint64]
     max: CCol[np.uint64]
     bits: CCol[np.uint64]
 
-class TypeLookup(LookupTable):
-    def __init__(self):
-        kind = {'u': False, 'i': True}
-        sizes = [1, 2, 4, 8]
-        types = np.array([
-            np.dtype(f"{k}{s}")
-            for k in kind
-            for s in sizes
-        ])
 
-        self.signed: CCol[], self.abs_min, self.max self.bits = ConstraintColumn(lookup['bits'])
-        #
-        # self.signed = ConstraintColumn(lookup['kind'])
-        # self.abs_min = ConstraintColumn(lookup['abs_min'])
-        # self.max = ConstraintColumn(lookup['max'])
-        # self.bits = ConstraintColumn(lookup['bits'])
 
-    def _build(self):
-        return np.array(
+def build_tlook():
+    kind = {'u': False, 'i': True}
+    sizes = [1, 2, 4, 8]
+    types = np.array([
+        np.dtype(f"{k}{s}")
+        for k in kind
+        for s in sizes
+    ])
+    return TypeLookup2.build(
             [
                 (
-                    self.kind[t.kind],
+                    kind[t.kind],
                     -np.iinfo(t).min,
                     np.iinfo(t).max,
                     np.iinfo(t).bits,
                 )
-                for t in self.types
-            ],
-            dtype=[
-                ('kind', np.bool),
-                ('abs_min', np.uint64),
-                ('max', np.uint64),
-                ('bits', np.uint8),
-            ],
+                for t in types
+            ]
         )
 
-    def first(self, condition: np.ndarray):
-        return self.all(condition)[0]
 
-    def all(self, condition):
-        return self.types[np.where(condition)]
-
-
-_LOOKUP_TBL = TypeLookup()
+_LOOKUP_TBL = build_tlook()
 print(_LOOKUP_TBL.signed == False)
 print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max > 123)
 print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max <= 123)
 print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max < 123)
 
 def _get_type(value: int, attr: str, signed: bool = False):
-    for dtype in _S_INT_TYPES if signed else _U_INT_TYPES:
-        if value <= getattr(np.iinfo(dtype), attr):
-            return dtype
-
-    return exc_to_many_bit.do_raise()
+    # for dtype in _S_INT_TYPES if signed else _U_INT_TYPES:
+    #     if value <= getattr(np.iinfo(dtype), attr):
+    #         return dtype
+    #
+    # return exc_to_many_bit.do_raise()
+    pass
 
 def get_type_for_scalar(value: int, signed: bool = False):
     # w = np.where(_LOOKUP_TBL.lookup.max >= value)
