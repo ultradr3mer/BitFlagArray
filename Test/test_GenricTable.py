@@ -75,6 +75,20 @@ def test_table_empty_data():
     assert list(tbl) == []
 
 
+def test_table_accepts_creator_class_or_instance():
+    via_cls = Table(name="via_cls",
+                    data=[(1, 0, 255, 8)],
+                    row_type=RowType,
+                    col_a_cre=NPContainerCreator)
+    via_inst = Table(name="via_inst",
+                     data=[(1, 0, 255, 8)],
+                     row_type=RowType,
+                     col_a_cre=NPContainerCreator())
+    assert isinstance(via_cls.kind, np.ndarray)
+    assert isinstance(via_inst.kind, np.ndarray)
+    assert via_cls.kind.tolist() == via_inst.kind.tolist()
+
+
 def test_table_columns_are_arrays(tbl):
     assert isinstance(tbl.kind, np.ndarray)
     assert tbl.kind.dtype == np.uint8
@@ -139,6 +153,8 @@ def test_adapter_repr(tbl):
 
 def test_adapter_init_column():
     adapter = NPColAdapter(parent=None, name='bits')
+    assert adapter.name == 'bits'
+    assert adapter.parent is None
     ary = np.array([(1, 2, 3)], dtype=[('kind', 'u1'), ('max', 'u8'), ('bits', 'u1')])
     col = adapter.init_column(ary, np.uint8)
     assert col.tolist() == [3]
