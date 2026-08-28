@@ -139,9 +139,7 @@ class QueryableTable[TRow](Table[TRow, ConstraintColCreator]):
         tbl = TypeLookup.build("mytbl", data)
     """
 
-    @classmethod
-    def get_col_creator(cls) -> type[ConstraintColCreator]:
-        return ConstraintColCreator
+    _col_creator_cls = ConstraintColCreator
 
 
 #====================================================

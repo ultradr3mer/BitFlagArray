@@ -88,7 +88,8 @@ class NPContainerCreator(TColContainerCreator[np.ndarray]):
 class Table[TRow, TCreator: TColContainerCreator](ABC):
     """Base for typed lookup tables backed by a numpy structured array.
 
-    Subclass and override ``get_row_type()`` and ``get_col_creator()``::
+    Subclass and override ``get_row_type()``; ``_col_creator_cls`` is set
+    by the intermediate base (``PlainTable`` / ``QueryableTable``)::
 
         class UserTable(PlainTable[UserRow]):
             @classmethod
@@ -100,7 +101,9 @@ class Table[TRow, TCreator: TColContainerCreator](ABC):
     fields: list[NpColDef]
     row_type: type[TRow]
     _ary: np.ndarray[Any, Any]
-    adapter: Dict[str,TCreator]
+    adapter: Dict[str, TColContainerAdapter]
+
+    _col_creator_cls: type[TCreator]
 
     def __init__(
         self,
@@ -117,16 +120,13 @@ class Table[TRow, TCreator: TColContainerCreator](ABC):
     def get_row_type(cls) -> type[TRow]:
         """Gibt den Row-Typ dieser konkreten Tabelle zurück."""
 
-    @classmethod
-    def get_col_creator(cls) -> type[TCreator]:
-
-
-    def create_columns(self, creator_type: Type[TCreator]) -> Dict[str,TCreator]:
-        col_creator = creator_type()
-        adapter_dict: Dict[str,TCreator] = { }
+    def create_columns(self) -> Dict[str, TColContainerAdapter]:
+        col_creator = type(self)._col_creator_cls()
+        adapter_dict: Dict[str, TColContainerAdapter] = {}
         for f in self.fields:
             adapter = col_creator.get_adapter(self, f.name)
             adapter_dict[f.name] = adapter
+            setattr(self, f.name, adapter.init_column(self._ary, f.type))
         return adapter_dict
 
     @classmethod
@@ -139,7 +139,7 @@ class Table[TRow, TCreator: TColContainerCreator](ABC):
 
         tbl = cls(name, fields, row_type)
         tbl._ary = ary
-        tbl.adapter = tbl.create_columns(Type[TCreator])
+        tbl.adapter = tbl.create_columns()
         return tbl
 
     @property
@@ -168,6 +168,12 @@ class Table[TRow, TCreator: TColContainerCreator](ABC):
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(name={self.name!r}, len={len(self)})'
+
+
+class PlainTable[TRow](Table[TRow, NPContainerCreator]):
+    """Table with plain numpy array columns."""
+
+    _col_creator_cls = NPContainerCreator
 
 
 #====================================================
