@@ -90,7 +90,7 @@ class Table[TRow, TCreator: TColContainerCreator]:
         self.name = name
         self.row_type = row_type
         self.fields = get_defs_from_rowtype(row_type)
-        self.data = np.array(data, dtype=row_type)
+        self.data = np.array(data, dtype=dtype_from_fields(self.fields))
         self.col_creator = col_a_cre
         self.adapter = self.create_columns()
 
@@ -113,16 +113,20 @@ class Table[TRow, TCreator: TColContainerCreator]:
 
     def __iter__(self):
         for rec in self.data:
-            yield red # RowType(*rec)
+            yield self.row_type(*rec)
 
     def __getitem__(self, key):
-        return self.data[key]
+        if isinstance(key, int):
+            return self.row_type(*self.data[key])
+        return [self.row_type(*d) for d in self.data[key]]
 
     def __len__(self):
         return len(self.data)
 
     def rows(self) -> list[Any]:
-        return list(self)
+        if len(self) == 1:
+            return self.row_type(*self.data)
+        return list([self.row_type(*d) for d in self.data])
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(name={self.name!r}, len={len(self)})'
@@ -150,7 +154,7 @@ if __name__ == "__main__":
     print("max  ->", tbl1.max)
 
     tbl2 = Table(name="via_creator",
-                 data=[(1, 0, 255, 8)],
+                 data=[(1, 0, 255, 8), (1, 0, 255, 8), (2, 1, 65535, 16)],
                  row_type=RowType,
                  col_a_cre=NPContainerCreator())
 
