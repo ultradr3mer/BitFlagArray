@@ -92,36 +92,36 @@ class RowType(NamedTuple):
     bits: np.uint8
 
 
-Other = create_table_type(name="Other", rowtype=RowType)
-print("Other dtype:", Other.dtype)
-print("Other row_type:", Other.row_type)
+if __name__ == "__main__":
+    Other = create_table_type(name="Other", rowtype=RowType)
+    print("Other dtype:", Other.dtype)
+    print("Other row_type:", Other.row_type)
 
-_tbl = Other.build([
-    (1, 0, 255, 8),
-    (2, 1, 65535, 16),
-])
-print("Other table ->", _tbl)
-print("Other kind  ->", _tbl.kind)
+    _tbl = Other.build([
+        (1, 0, 255, 8),
+        (2, 1, 65535, 16),
+    ])
+    print("Other table ->", _tbl)
+    print("Other kind  ->", _tbl.kind)
 
-_ary = np.asarray([(1, 0, 255, 8)], dtype=Other.dtype)
-print("Other row 0 ->", Other.row(_ary, 0))
+    _ary = np.asarray([(1, 0, 255, 8)], dtype=Other.dtype)
+    print("Other row 0 ->", Other.row(_ary, 0))
 
+    _test_spec: FieldSpec = [
+        ('kind', np.bool), ('abs_min', np.uint64),
+        ('max', np.uint64), ('bits', np.uint8),
+    ]
+    MyTypes = create_table_type("MyTypes", to_col_defs(_test_spec))
+    print("MyTypes dtype:", MyTypes.dtype)
 
-_test_spec: FieldSpec = [
-    ('kind', np.bool), ('abs_min', np.uint64),
-    ('max', np.uint64), ('bits', np.uint8),
-]
-MyTypes = create_table_type("MyTypes", to_col_defs(_test_spec))
-print("MyTypes dtype:", MyTypes.dtype)
+    rows_data = [
+        (True, 0,   255,       8),
+        (False, 1,  65535,     16),
+        (True, 2,  4294967295, 32),
+    ]
+    tbl = MyTypes.build(rows_data)
+    print("MyTypes table ->", tbl)
 
-rows_data = [
-    (True, 0,   255,       8),
-    (False, 1,  65535,     16),
-    (True, 2,  4294967295, 32),
-]
-tbl = MyTypes.build(rows_data)
-print("MyTypes table ->", tbl)
-
-ary = np.asarray(rows_data, dtype=MyTypes.dtype)
-for r in MyTypes.rows(ary):
-    print("  row ->", r)
+    ary = np.asarray(rows_data, dtype=MyTypes.dtype)
+    for r in MyTypes.rows(ary):
+        print("  row ->", r)
