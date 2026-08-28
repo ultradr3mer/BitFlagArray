@@ -336,14 +336,14 @@ ttest = np.dtype([
 # ('bits', np.uint8),
 # ]]):
 #
-# class TypeLookup2(LookupTable[[
-#     ('signed',   np.bool),
-#     ('abs_min',  np.uint64),
-#     ('max',      np.uint64),
-#     ('bits',     np.uint8),
-#     ('prev_max', np.int64),
-# ]]):
-#     pass
+class TypeLookup2(LookupTable[[
+    ('signed',   np.bool),
+    ('abs_min',  np.uint64),
+    ('max',      np.uint64),
+    ('bits',     np.uint8),
+    ('prev_max', np.int64),
+]]):
+    pass
 
 
 
