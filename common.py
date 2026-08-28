@@ -1,8 +1,7 @@
 from argparse import ArgumentError
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal, get_type_hints, \
-    get_origin, get_args
+from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -184,42 +183,58 @@ T_tbl_impl = TypeVar('T_tbl_impl', bound="LookupTable")
 
 CCol = ConstraintColumn
 
-class LookupTable(Generic[T_tbl_impl]):
+# dtype spec: list of (name, dtype) tuples.
+TFieldSpec = list[tuple[str, Any]]
+
+
+class LookupTable:
+    """Base for dtype-first lookup tables.
+
+    Subclass via::
+
+        class MyTable(LookupTable[[
+            ('signed', np.bool),
+            ('max',    np.uint64),
+        ]]):
+            pass
+    """
+
+    _fields_spec: TFieldSpec = []
+    _array: npt.NDArray[Any]
+
     def __init__(self):
         self._array = None
 
+    # ---- dtype-first machinery ----
+
+    def __class_getitem__(cls, spec: TFieldSpec):
+        # Validate up front so typos surface at class-creation time.
+        if not isinstance(spec, (list, tuple)):
+            raise TypeError("LookupTable[...] expects a list of (name, dtype) tuples")
+        norm = []
+        for entry in spec:
+            if not (isinstance(entry, (list, tuple)) and len(entry) == 2):
+                raise TypeError(f"field spec entry must be (name, dtype), got {entry!r}")
+            name, dt = entry
+            if not isinstance(name, str):
+                raise TypeError(f"field name must be str, got {name!r}")
+            norm.append((name, np.dtype(dt)))
+        return type(
+            f"LookupTableSpec",
+            (LookupTable,),
+            {"_fields_spec": norm},
+        )
+
     @classmethod
     def _field_names(cls) -> list[str]:
-        hints = get_type_hints(cls)
-        return [
-            name for name, ann in hints.items()
-            if get_origin(ann) is CCol
-        ]
+        return [name for name, _ in cls._fields_spec]
 
     @classmethod
     def dtype(cls) -> np.dtype:
-        hints = get_type_hints(cls)
-
-        fields = []
-
-        for name in cls._field_names():
-            annotation = hints[name]
-
-            # Bei CCol[np.uint64] ist:
-            # origin == CCol
-            # args == (np.uint64,)
-            if get_origin(annotation) is not CCol:
-                raise TypeError(
-                    f"{cls.__name__}.{name} must be annotated as CCol[...]"
-                )
-
-            (item_type,) = get_args(annotation)
-            fields.append((name, np.dtype(item_type)))
-
-        return np.dtype(fields)
+        return np.dtype(list(cls._fields_spec))
 
     @classmethod
-    def build(cls, array: npt.ArrayLike):
+    def build(cls, array: npt.ArrayLike) -> "LookupTable":
         dtype = cls.dtype()
         ary = np.asarray(array, dtype=dtype)
 
@@ -271,12 +286,14 @@ class LookupTable(Generic[T_tbl_impl]):
 #====================================================
 
 
-class TypeLookup2(LookupTable):
-    signed: CCol[np.bool]
-    abs_min: CCol[np.uint64]
-    max: CCol[np.uint64]
-    bits: CCol[np.uint64]
-    prev_max: CCol[np.int64]
+class TypeLookup2(LookupTable[[
+    ('signed',   np.bool),
+    ('abs_min',  np.uint64),
+    ('max',      np.uint64),
+    ('bits',     np.uint8),
+    ('prev_max', np.int64),
+]]):
+    pass
 
 
 
