@@ -123,7 +123,7 @@ TFieldSpec = list[tuple[str, Any]]
 _row_types: dict[type, type] = {}
 
 
-class LookupTable:
+class QueryableTable:
     """Base for dtype-first lookup tables.
 
     Subclass via::
@@ -135,87 +135,27 @@ class LookupTable:
             pass
     """
 
-    _fields_spec: TFieldSpec = []
-    _array: npt.NDArray[Any] | None
+    #Inherit Generic table
 
     def __init__(self):
         self._array = None
 
-    if TYPE_CHECKING:
-        def __getattr__(self, name: str) -> CCol: ...
-
-    # ---- dtype-first machinery ----
-
-    def __class_getitem__(cls, spec: TFieldSpec):
-        # Validate up front so typos surface at class-creation time.
-        if not isinstance(spec, (list, tuple)):
-            raise TypeError("LookupTable[...] expects a list of (name, dtype) tuples")
-        norm = []
-        for entry in spec:
-            if not (isinstance(entry, (list, tuple)) and len(entry) == 2):
-                raise TypeError(f"field spec entry must be (name, dtype), got {entry!r}")
-            name, dt = entry
-            if not isinstance(name, str):
-                raise TypeError(f"field name must be str, got {name!r}")
-            norm.append((name, np.dtype(dt)))
-        return type(
-            f"LookupTableSpec",
-            (LookupTable,),
-            {"_fields_spec": norm},
-        )
-
-    @classmethod
-    def _field_names(cls) -> list[str]:
-        return [name for name, _ in cls._fields_spec]
-
-    @classmethod
-    def dtype(cls) -> np.dtype:
-        return np.dtype(list(cls._fields_spec))
-
-    @classmethod
-    def build(cls, array: npt.ArrayLike) -> "LookupTable":
-        dtype = cls.dtype()
-        ary = np.asarray(array, dtype=dtype)
-
-        obj = cls()
-        for name in cls._field_names():
-            setattr(obj, name, CCol(ary, name))
-        obj._array = ary
-        return obj
-
-    @classmethod
-    def unpack(cls, array: npt.ArrayLike):
-        """Gibt die einzelnen rohen NumPy-Spalten zurück."""
-        ary = np.asarray(array, dtype=cls.dtype())
-        return tuple(ary[name] for name in cls._field_names())
-
     @classmethod
     def _row_type(cls) -> type:
         cached = _row_types.get(cls)
-        if cached is not None:
-            return cached
-        Row = NamedTuple(
-            f"{cls.__name__}Row",
-            [(name, Any) for name in cls._field_names()],
-        )
-        _row_types[cls] = Row
-        return Row
+        #TODO
+        pass
 
     def __iter__(self):
-        Row = type(self)._row_type()
-        names = type(self)._field_names()
-        for rec in self._array:
-            yield Row(*[rec[n] for n in names])
+        # TODO
+        pass
 
     def __getitem__(self, key):
-        if isinstance(key, (int, np.integer)):
-            Row = type(self)._row_type()
-            names = type(self)._field_names()
-            rec = self._array[key]
-            return Row(*[rec[n] for n in names])
-        return self._array[key]
+        # TODO
+        pass
 
     def __len__(self):
-        return len(self._array)
+        # TODO
+        pass
 
 
