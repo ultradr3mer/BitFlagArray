@@ -33,78 +33,67 @@ def _dtype_from_fields(fields: list[NpColDef]) -> np.dtype[Any]:
 
 
 #====================================================
-#               TABLE BASE HIERARCHY
+#               COLUMN CONTAINER ADAPTERS
 #====================================================
 
-# class TColAdapter[ TCol]:
-#     """Base Class for Column Adapters, adaptation is neccessary to utlizize arrays like np.array als column
-#         The Differences in Initialization can be easily accounted for.
-#     """
-#
-#     @abstractmethod
-#     def make_column(cls, parent: Table, ary: np.ndarray, field: str) -> TCol:
-#         """ Creates the actual column instance, """
-#
-# # class TCol_Container[TCol]:
-#     pass
-
 TCell = TypeVar('TCell')
-TCol_Container = TypeVar('TCol_Container')
+TColContainer = TypeVar('TColContainer')
 
 
-class TColContainerCreator(ABC, Generic[TCol_Container]):
-    """Base Class for Column Container creation from cell type."""
+class TColContainerAdapter(ABC, Generic[TColContainer, TCell]):
+    """Adapter: builds a column from a structured array.
 
-    @abstractmethod
-    def get_container(self, parent: Table, name: str, cell_type: Type[TCell]) -> TColContainerAdapter[TCol_Container, TCell]:
-        """Base Class for Column Container creation from cell type."""
-
-class TColContainerAdapter(ABC, Generic[TCol_Container, TCell]):
-    """Base Class for Column Adapters, adaptation is neccessary to utlizize arrays like np.array als column
-        The Differences in Initialization can be easily accounted for.
+    Holds table-level context (parent, name) and produces a column
+    container of type ``TColContainer`` from the raw array data.
     """
 
-    @abstractmethod
-    def init_column(self, data: npt.NDArray, selector: Any, cell_type: Type[TCell]) -> TCol_Container:
-        """ Creates the actual column instance, """
-
-class NPColAdapter(TColContainerAdapter[npt.NDArray, TCell]):
-    def __init__(self, parent: Table, name: str):
+    def __init__(self, parent: "Table", name: str) -> None:
         self.parent = parent
         self.name = name
 
-    def init_column(self, data: npt.NDArray, selector: str, cell_type: Type[TCell]) -> npt.NDArray[TCell]:
-        test = np.array([1, 2, 3])
-        data = data[selector]
-        return np.array(data, dtype=cell_type)
+    @abstractmethod
+    def init_column(self, ary: np.ndarray, cell_type: type[TCell]) -> TColContainer:
+        """Create the column from the structured array."""
 
-    def __repr__(self):
-        return f'NPColAdapter[{name}] of({repr(self.parent)})'
-
-
-class NPContainerCreator(TColContainerCreator[npt.NDArray]):
-
-    def get_container(self, parent: Table, name: str, cell_type: Type[TCell]) -> TColContainerAdapter[
-        TCol_Container, TCell]:
-        container: NPColAdapter[TCell] = NPColAdapter(parent, name)
-        return container
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}[{self.name}] of {self.parent!r}'
 
 
+class TColContainerCreator(ABC, Generic[TColContainer]):
+    """Factory: creates column adapters for a given container type."""
+
+    @abstractmethod
+    def get_adapter(self, parent: "Table", name: str) -> TColContainerAdapter[TColContainer, Any]:
+        """Create an adapter for the given table and field name."""
+
+
+class NPColAdapter(TColContainerAdapter[np.ndarray, Any]):
+    """Adapter for plain numpy array columns."""
+
+    def init_column(self, ary: np.ndarray, cell_type: type[Any]) -> np.ndarray:
+        return ary[self.name]
+
+
+class NPContainerCreator(TColContainerCreator[np.ndarray]):
+    """Factory for numpy array column adapters."""
+
+    def get_adapter(self, parent: "Table", name: str) -> NPColAdapter:
+        return NPColAdapter(parent, name)
+
+
+#====================================================
+#               TABLE BASE HIERARCHY
+#====================================================
 
 class Table[TRow, TCol](ABC):
     """Base for typed lookup tables backed by a numpy structured array.
 
-    Subclass and override ``get_row_type()`` to bind a row NamedTuple,
-    and ``_make_column()`` to specify the column wrapper type::
+    Subclass and override ``get_row_type()`` and ``get_col_creator()``::
 
-        class UserTable(Table[UserRow, np.ndarray]):
+        class UserTable(PlainTable[UserRow]):
             @classmethod
             def get_row_type(cls) -> type[UserRow]:
                 return UserRow
-
-            @classmethod
-            def _make_column(cls, ary, name) -> np.ndarray:
-                return ary[name]
     """
 
     name: str
@@ -129,12 +118,14 @@ class Table[TRow, TCol](ABC):
 
     @classmethod
     @abstractmethod
-    def _make_column(cls, ary: np.ndarray, name: str) -> TCol:
-        """Erzeugt eine Spalte aus dem strukturierten Array und dem Feldnamen."""
+    def get_col_creator(cls) -> type[TColContainerCreator[TCol]]:
+        """Gibt den Column-Container-Creator für diese Tabelle zurück."""
 
     def _init_columns(self) -> None:
-        for name in self._field_names:
-            setattr(self, name, type(self)._make_column(self._ary, name))
+        creator = type(self).get_col_creator()()
+        for f in self.fields:
+            adapter = creator.get_adapter(self, f.name)
+            setattr(self, f.name, adapter.init_column(self._ary, f.type))
 
     @classmethod
     def build(cls, name: str, data: npt.ArrayLike) -> "Table[TRow, TCol]":
@@ -173,13 +164,16 @@ class Table[TRow, TCol](ABC):
     def rows(self) -> list[Any]:
         return list(self)
 
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(name={self.name!r}, len={len(self)})'
+
 
 class PlainTable[TRow](Table[TRow, np.ndarray]):
     """Table with plain numpy array columns."""
 
     @classmethod
-    def _make_column(cls, ary: np.ndarray, name: str) -> np.ndarray:
-        return ary[name]
+    def get_col_creator(cls) -> type[TColContainerCreator[np.ndarray]]:
+        return NPContainerCreator
 
 
 #====================================================

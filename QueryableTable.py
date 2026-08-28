@@ -5,7 +5,7 @@ from typing import Any, Literal
 import numpy as np
 import numpy.typing as npt
 
-from GenricTable import Table, NpColDef
+from GenricTable import Table, NpColDef, TColContainerAdapter, TColContainerCreator
 
 
 #====================================================
@@ -103,6 +103,24 @@ CCol = ConstraintColumn
 
 
 #====================================================
+#               CONSTRAINT COLUMN ADAPTER
+#====================================================
+
+class ConstraintColAdapter(TColContainerAdapter[ConstraintColumn, Any]):
+    """Adapter for ConstraintColumn columns."""
+
+    def init_column(self, ary: np.ndarray, cell_type: type[Any]) -> ConstraintColumn:
+        return ConstraintColumn(ary, self.name)
+
+
+class ConstraintColCreator(TColContainerCreator[ConstraintColumn]):
+    """Factory for ConstraintColumn column adapters."""
+
+    def get_adapter(self, parent: Table, name: str) -> ConstraintColAdapter:
+        return ConstraintColAdapter(parent, name)
+
+
+#====================================================
 #               QUERYABLE TABLE
 #====================================================
 
@@ -122,8 +140,8 @@ class QueryableTable[TRow](Table[TRow, ConstraintColumn]):
     """
 
     @classmethod
-    def _make_column(cls, ary: np.ndarray, name: str) -> ConstraintColumn:
-        return ConstraintColumn(ary, name)
+    def get_col_creator(cls) -> type[TColContainerCreator[ConstraintColumn]]:
+        return ConstraintColCreator
 
 
 #====================================================
