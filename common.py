@@ -2,7 +2,7 @@ from argparse import ArgumentError
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal, get_type_hints, \
-    get_origin
+    get_origin, get_args
 
 import numpy as np
 import numpy.typing as npt
@@ -83,26 +83,57 @@ Undefined = Literal
 class ConstraintSelection:
     indices: npt.NDArray[np.intp]
 
-    def __and__(self, other: "ConstraintSelection") -> "ConstraintSelection":
-        if not isinstance(other, ConstraintSelection):
-            return NotImplemented
+    def __and__(self, other):
+        if isinstance(other, ConstraintSelection):
+            return ConstraintSelection(
+                np.intersect1d(self.indices, other.indices)
+            )
+        if isinstance(other, ConstraintColumn):
+            return other[self]
+        return NotImplemented
 
-        return ConstraintSelection(
-            np.intersect1d(self.indices, other.indices)
+    def __bool__(self) -> bool:
+        raise TypeError(
+            "ConstraintSelection cannot be used with 'and'; "
+            "use '&' or an explicit filtering method."
         )
 
 import operator
 
 class ConstraintColumn(Generic[T_constr_item]):
-    def __init__(self, data: npt.NDArray[T_constr_item], selector: str | None = None):
+    def __init__(
+        self,
+        data: npt.NDArray[T_constr_item],
+        selector: str | None = None,
+        *,
+        _column: npt.NDArray[T_constr_item] | None = None,
+        _parent_indices: npt.NDArray[np.intp] | None = None,
+    ):
+        if _column is not None:
+            self.column = _column
+            self.table = data
+            self.parent_indices = _parent_indices
+            return
+
         if selector is None:
             self.column = data
-            self.table = data
         else:
             self.column = data[selector]
-            self.table = data
+        self.table = data
+        self.parent_indices = None
+
+    def _resolve(self, local_indices: npt.NDArray[np.intp]) -> npt.NDArray[np.intp]:
+        if self.parent_indices is None:
+            return local_indices
+        return self.parent_indices[local_indices]
 
     def __getitem__(self, key):
+        if isinstance(key, ConstraintSelection):
+            return ConstraintColumn(
+                self.table,
+                _column=self.column[key.indices],
+                _parent_indices=key.indices,
+            )
         return self.column[key]
 
     def _compare(self, value: object, op) -> ConstraintSelection:
@@ -111,7 +142,8 @@ class ConstraintColumn(Generic[T_constr_item]):
         else:
             mask = op(self.column, value)
 
-        return ConstraintSelection(np.flatnonzero(mask))
+        local = np.flatnonzero(mask)
+        return ConstraintSelection(self._resolve(local))
 
     def __eq__(self, value: object) -> ConstraintSelection:
         return self._compare(value, operator.eq)
@@ -131,19 +163,30 @@ class ConstraintColumn(Generic[T_constr_item]):
     def __ge__(self, value: object) -> ConstraintSelection:
         return self._compare(value, operator.ge)
 
+    def __hash__(self) -> int:
+        return id(self)
 
-T_tbl_impl = TypeVar('T_tbl_impl', bound=NamedTuple)
+
+T_tbl_impl = TypeVar('T_tbl_impl', bound="LookupTable")
 
 CCol = ConstraintColumn
 
-class LookupTable(NamedTuple, Generic[T_tbl_impl]):
+class LookupTable(Generic[T_tbl_impl]):
+    @classmethod
+    def _field_names(cls) -> list[str]:
+        hints = get_type_hints(cls)
+        return [
+            name for name, ann in hints.items()
+            if get_origin(ann) is CCol
+        ]
+
     @classmethod
     def dtype(cls) -> np.dtype:
         hints = get_type_hints(cls)
 
         fields = []
 
-        for name in cls._fields:
+        for name in cls._field_names():
             annotation = hints[name]
 
             # Bei CCol[np.uint64] ist:
@@ -160,19 +203,21 @@ class LookupTable(NamedTuple, Generic[T_tbl_impl]):
         return np.dtype(fields)
 
     @classmethod
-    def build(cls, array: npt.ArrayLike) -> T_tbl_impl:
+    def build(cls, array: npt.ArrayLike) -> "LookupTable":
         dtype = cls.dtype()
         ary = np.asarray(array, dtype=dtype)
 
-        return cls(
-            *(CCol(ary,name) for name in cls._fields)
-        )
+        obj = cls()
+        for name in cls._field_names():
+            setattr(obj, name, CCol(ary, name))
+        obj._array = ary
+        return obj
 
     @classmethod
     def unpack(cls, array: npt.ArrayLike):
         """Gibt die einzelnen rohen NumPy-Spalten zurück."""
         ary = np.asarray(array, dtype=cls.dtype())
-        return tuple(ary[name] for name in cls._fields)
+        return tuple(ary[name] for name in cls._field_names())
 
 
 
@@ -212,10 +257,11 @@ def build_tlook():
 
 
 _LOOKUP_TBL = build_tlook()
-print(_LOOKUP_TBL.signed == False)
-print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max > 123)
-print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max <= 123)
-print(_LOOKUP_TBL.signed == False and _LOOKUP_TBL.max < 123)
+_sel = _LOOKUP_TBL.signed == False
+print(_sel)
+print((_LOOKUP_TBL.signed == None & _LOOKUP_TBL.max) > 123)
+print((_sel & _LOOKUP_TBL.max) <= 123)
+print((_sel & _LOOKUP_TBL.max) < 123)
 
 def _get_type(value: int, attr: str, signed: bool = False):
     # for dtype in _S_INT_TYPES if signed else _U_INT_TYPES:
