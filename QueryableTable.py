@@ -124,7 +124,7 @@ class ConstraintColCreator(TColContainerCreator[ConstraintColumn]):
 #               QUERYABLE TABLE
 #====================================================
 
-class QueryableTable[TRow](Table[TRow, ConstraintColumn]):
+class QueryableTable[TRow](Table[TRow, ConstraintColCreator]):
     """Table with ConstraintColumn columns for querying.
 
     Subclass and override ``get_row_type()``::
@@ -140,7 +140,7 @@ class QueryableTable[TRow](Table[TRow, ConstraintColumn]):
     """
 
     @classmethod
-    def get_col_creator(cls) -> type[TColContainerCreator[ConstraintColumn]]:
+    def get_col_creator(cls) -> type[ConstraintColCreator]:
         return ConstraintColCreator
 
 

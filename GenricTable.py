@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Any, get_type_hints, TypeVar, Type, Generic
+from typing import NamedTuple, Any, get_type_hints, TypeVar, Type, Generic, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -85,7 +85,7 @@ class NPContainerCreator(TColContainerCreator[np.ndarray]):
 #               TABLE BASE HIERARCHY
 #====================================================
 
-class Table[TRow, TCol](ABC):
+class Table[TRow, TCreator: TColContainerCreator](ABC):
     """Base for typed lookup tables backed by a numpy structured array.
 
     Subclass and override ``get_row_type()`` and ``get_col_creator()``::
@@ -100,6 +100,7 @@ class Table[TRow, TCol](ABC):
     fields: list[NpColDef]
     row_type: type[TRow]
     _ary: np.ndarray[Any, Any]
+    adapter: Dict[str,TCreator]
 
     def __init__(
         self,
@@ -117,18 +118,19 @@ class Table[TRow, TCol](ABC):
         """Gibt den Row-Typ dieser konkreten Tabelle zurück."""
 
     @classmethod
-    @abstractmethod
-    def get_col_creator(cls) -> type[TColContainerCreator[TCol]]:
-        """Gibt den Column-Container-Creator für diese Tabelle zurück."""
+    def get_col_creator(cls) -> type[TCreator]:
 
-    def _init_columns(self) -> None:
-        creator = type(self).get_col_creator()()
+
+    def create_columns(self, creator_type: Type[TCreator]) -> Dict[str,TCreator]:
+        col_creator = creator_type()
+        adapter_dict: Dict[str,TCreator] = { }
         for f in self.fields:
-            adapter = creator.get_adapter(self, f.name)
-            setattr(self, f.name, adapter.init_column(self._ary, f.type))
+            adapter = col_creator.get_adapter(self, f.name)
+            adapter_dict[f.name] = adapter
+        return adapter_dict
 
     @classmethod
-    def build(cls, name: str, data: npt.ArrayLike) -> "Table[TRow, TCol]":
+    def build(cls, name: str, data: npt.ArrayLike) -> "Table[TRow, TCreator]":
         """Creator: leitet dtype vom Row-Typ ab, konvertiert Daten, instanziiert."""
         row_type = cls.get_row_type()
         fields = _col_defs_from_rowtype(row_type)
@@ -137,7 +139,7 @@ class Table[TRow, TCol](ABC):
 
         tbl = cls(name, fields, row_type)
         tbl._ary = ary
-        tbl._init_columns()
+        tbl.adapter = tbl.create_columns(Type[TCreator])
         return tbl
 
     @property
@@ -168,19 +170,11 @@ class Table[TRow, TCol](ABC):
         return f'{type(self).__name__}(name={self.name!r}, len={len(self)})'
 
 
-class PlainTable[TRow](Table[TRow, np.ndarray]):
-    """Table with plain numpy array columns."""
-
-    @classmethod
-    def get_col_creator(cls) -> type[TColContainerCreator[np.ndarray]]:
-        return NPContainerCreator
-
-
 #====================================================
 #               TABLE CREATOR
 #====================================================
 
-class TableCreator[TRow, TTable: Table[TRow, Any]]:
+class TableCreator[TRow, TTable: Table[TRow, TColContainerCreator]]:
     """Generischer Creator für Tabellen.
 
     Hält den Tabellentyp und dessen Row-Typ und erstellt Instanzen::
