@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Any, get_type_hints
+from typing import NamedTuple, Any, get_type_hints, TypeVar, Type, Generic
 
 import numpy as np
 import numpy.typing as npt
@@ -35,6 +35,61 @@ def _dtype_from_fields(fields: list[NpColDef]) -> np.dtype[Any]:
 #====================================================
 #               TABLE BASE HIERARCHY
 #====================================================
+
+# class TColAdapter[ TCol]:
+#     """Base Class for Column Adapters, adaptation is neccessary to utlizize arrays like np.array als column
+#         The Differences in Initialization can be easily accounted for.
+#     """
+#
+#     @abstractmethod
+#     def make_column(cls, parent: Table, ary: np.ndarray, field: str) -> TCol:
+#         """ Creates the actual column instance, """
+#
+# # class TCol_Container[TCol]:
+#     pass
+
+TCell = TypeVar('TCell')
+TCol_Container = TypeVar('TCol_Container')
+
+
+class TColContainerCreator(ABC, Generic[TCol_Container]):
+    """Base Class for Column Container creation from cell type."""
+
+    @abstractmethod
+    def get_container(self, parent: Table, name: str, cell_type: Type[TCell]) -> TColContainerAdapter[TCol_Container, TCell]:
+        """Base Class for Column Container creation from cell type."""
+
+class TColContainerAdapter(ABC, Generic[TCol_Container, TCell]):
+    """Base Class for Column Adapters, adaptation is neccessary to utlizize arrays like np.array als column
+        The Differences in Initialization can be easily accounted for.
+    """
+
+    @abstractmethod
+    def init_column(self, data: npt.NDArray, selector: Any, cell_type: Type[TCell]) -> TCol_Container:
+        """ Creates the actual column instance, """
+
+class NPColAdapter(TColContainerAdapter[npt.NDArray, TCell]):
+    def __init__(self, parent: Table, name: str):
+        self.parent = parent
+        self.name = name
+
+    def init_column(self, data: npt.NDArray, selector: str, cell_type: Type[TCell]) -> npt.NDArray[TCell]:
+        test = np.array([1, 2, 3])
+        data = data[selector]
+        return np.array(data, dtype=cell_type)
+
+    def __repr__(self):
+        return f'NPColAdapter[{name}] of({repr(self.parent)})'
+
+
+class NPContainerCreator(TColContainerCreator[npt.NDArray]):
+
+    def get_container(self, parent: Table, name: str, cell_type: Type[TCell]) -> TColContainerAdapter[
+        TCol_Container, TCell]:
+        container: NPColAdapter[TCell] = NPColAdapter(parent, name)
+        return container
+
+
 
 class Table[TRow, TCol](ABC):
     """Base for typed lookup tables backed by a numpy structured array.
