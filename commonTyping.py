@@ -2,8 +2,7 @@ from typing import TypeVar, Generic, Type, List, Iterable, Any, overload, Litera
 
 import numpy as np
 import numpy.typing as npt
-
-from GenericTable import table_type_from_fields
+from GenericTable import TableFields
 from QueryableTable import QTblSpecialCol, CCol, Query, Undefined
 from common import ExcRaiser
 
@@ -12,29 +11,17 @@ from common import ExcRaiser
 #                   TYPE DETECTION
 # ====================================================
 
-class DTableFields:
-    """Single shared table type declaration.
-
-    Each field is declared once as ``Range | Item`` (``CCol | scalar``):
-    the table exposes the range members as columns, a row holds the item
-    types. ``TypeTable`` inherits this class so the fields exist
-    statically on the table; ``DTable`` (the table type, its Item
-    variant) is generated from it.
-    """
+class DTableFields(TableFields):
     signed: CCol | np.bool_
     abs_min: CCol | np.uint64
     max: CCol | np.uint64
     bits: CCol | np.uint8
 
 
-DTable = table_type_from_fields('DTable', DTableFields)
-
-
-class TypeTable(QTblSpecialCol[DTable, Type[Any]], DTableFields):
-    """Inherits the shared DTableFields declaration - nothing redeclared here."""
+class TypeTable(QTblSpecialCol[DTableFields, Type[Any]], DTableFields):
 
     def __init__(self, data: npt.ArrayLike, result_dict: npt.NDArray[Any]):
-        super().__init__("IntegerTypeTable", data, result_dict, DTable)
+        super().__init__("IntegerTypeTable", data, result_dict)
 
 
 

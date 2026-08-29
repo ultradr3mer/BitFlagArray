@@ -1,5 +1,6 @@
 from types import UnionType
-from typing import NamedTuple, Any, get_type_hints, get_args, get_origin, Union, Type, List, TYPE_CHECKING
+from typing import NamedTuple, Any, get_type_hints, get_args, get_origin, Union, List, TYPE_CHECKING
+from weakref import WeakKeyDictionary
 
 import numpy as np
 import numpy.typing as npt
@@ -10,6 +11,10 @@ from common import ExceptionRaiser, get_first_or
 #====================================================
 #           TABLE TYPE DEFINITIONS
 #====================================================
+
+class TableFields:
+    """Marker base for a shared ``Range | Item`` table type declaration."""
+
 
 class NpColDef(NamedTuple):
     name: str
@@ -58,33 +63,41 @@ def get_defs_from_table_type(table_type: type) -> list[NpColDef]:
     ``Range | Item``; the item type defines the column dtype.
     """
     hints = get_type_hints(table_type)
-    return [NpColDef(name, np.dtype(item_type_of(hints[name]))) for name in table_type._fields]
+    return [NpColDef(name, np.dtype(item_type_of(hints[name]))) for name in hints]
 
 
 def dtype_from_fields(fields: list[NpColDef]) -> np.dtype[Any]:
     return np.dtype([(f.name, f.type) for f in fields])
 
 
-def table_type_from_fields(typename: str, fields_cls: type) -> type:
-    """Build a NamedTuple table type from a plain shared fields-class.
+_item_variant_cache: "WeakKeyDictionary[type, type]" = WeakKeyDictionary()
 
-    Companion to the shared declaration pattern: the fields-class declares
-    each field once as ``Range | Item``, the table inherits the class so
-    the fields exist statically on it, and this derives the table type
-    (the Item variant) from the very same annotations.
+
+def table_item_from_fields(fields_cls: type) -> type:
+    """Item variant of a TableFields declaration: scalar members only.
+
+    Cached per declaration class, so every table of that declaration
+    shares one stable item type.
     """
-    return NamedTuple(typename, get_type_hints(fields_cls).items())
+    item = _item_variant_cache.get(fields_cls)
+    if item is None:
+        hints = get_type_hints(fields_cls)
+        typename = fields_cls.__name__.removesuffix('Fields')
+        item = NamedTuple(typename, [(name, item_type_of(h)) for name, h in hints.items()])
+        _item_variant_cache[fields_cls] = item
+    return item
 
 
-def table_range_from_type(table_type: type, default_range: type = np.ndarray) -> type:
+def table_range_from_type(table_type: type, default_range: type = np.ndarray,
+                          basename: str | None = None) -> type:
     """Range variant of a table type: one column (range) per field.
 
     Fields that declare no range member fall back to ``default_range``
     (the family's column type).
     """
     hints = get_type_hints(table_type)
-    fields = [(name, range_type_of(hints[name]) or default_range) for name in table_type._fields]
-    return NamedTuple(f"{table_type.__name__}Range", fields)
+    fields = [(name, range_type_of(hints[name]) or default_range) for name in hints]
+    return NamedTuple(f"{basename or table_type.__name__}Range", fields)
 
 
 #====================================================
@@ -94,11 +107,11 @@ def table_range_from_type(table_type: type, default_range: type = np.ndarray) ->
 class Table[TRowNRange]:
     """Structured table driven by its table type.
 
-    The table type (a NamedTuple) declares each field once as
-    ``Range | Item``: the table exposes the range members as columns,
-    ``table[i]`` returns the Item variant (a row), ``table[i:j]`` the
-    Range variant (columns over the selection). Column types are
-    specified by the table type - families only provide ``build_column``.
+    The table type is a ``TableFields`` declaration (each field once as
+    ``Range | Item``) or a legacy NamedTuple passed as ``table_type``.
+    The table exposes the range members as columns, ``table[i]`` returns
+    the Item variant (a row), ``table[i:j]`` the Range variant (columns
+    over the selection). Both variants are derived inside the framework.
     """
 
     default_range: type = np.ndarray  # column type for fields declaring no range member
@@ -106,14 +119,32 @@ class Table[TRowNRange]:
     def __init__(self,
                  name: str,
                  data: npt.ArrayLike,
-                 table_type: Type[TRowNRange]):
+                 table_type: type | None = None):
+        if table_type is None:
+            table_type = self._find_table_fields()
         self.name = name
         self.table_type = table_type
         self.fields = get_defs_from_table_type(table_type)
         self.data = np.array(data, dtype=dtype_from_fields(self.fields))
-        self.range_type = table_range_from_type(table_type, type(self).default_range)
+        if isinstance(table_type, type) and issubclass(table_type, TableFields):
+            self.item_type = table_item_from_fields(table_type)   # declaration: derive the row tuple
+        else:
+            self.item_type = table_type                            # legacy NamedTuple is the item itself
+        self.range_type = table_range_from_type(table_type, type(self).default_range,
+                                                basename=self.item_type.__name__)
         self._cols = self.create_cols_set_attr()
         self._check_col_attrs()
+
+    def _find_table_fields(self) -> type:
+        """Most-derived TableFields declaration in this table's MRO."""
+        for cls in type(self).__mro__:
+            # skip the framework classes (the table itself inherits the
+            # declaration, so it also matches the subclass check)
+            if cls is not TableFields and issubclass(cls, TableFields) and not issubclass(cls, Table):
+                return cls
+        raise TypeError(
+            f"{type(self).__name__} needs a table type: pass table_type or "
+            f"inherit a TableFields declaration")
 
     def build_column(self, data: np.ndarray, name: str):
         """Range member for one field over the given (sub-)data. Families override."""
@@ -135,8 +166,8 @@ class Table[TRowNRange]:
 
     def _check_col_attrs(self) -> None:
         names = [f.name for f in self.fields]
-        assert names == list(self.table_type._fields), \
-            f"field names mismatch: {names} != {list(self.table_type._fields)}"
+        assert names == list(self.item_type._fields), \
+            f"field names mismatch: {names} != {list(self.item_type._fields)}"
         for i, name in enumerate(names):
             assert getattr(self, name, None) is self._cols[i], \
                 f"column attr {name!r} does not hold its column (index {i})"
@@ -159,12 +190,12 @@ class Table[TRowNRange]:
 
     def __iter__(self):
         for rec in self.data:
-            yield self.table_type(*rec)
+            yield self.item_type(*rec)
 
     def __getitem__(self, key):
         if isinstance(key, (int, np.integer)):
-            return self.table_type(*self.data[key])      # Item Type variant
-        return self.range_variant(self.data[key])         # Range Type variant
+            return self.item_type(*self.data[key])         # Item Type variant
+        return self.range_variant(self.data[key])          # Range Type variant
 
     def range_variant(self, sub_data: np.ndarray):
         """Range Type variant of the table over the selected (sub-)data."""
@@ -175,7 +206,7 @@ class Table[TRowNRange]:
 
     def rows(self) -> list[Any]:
         """All rows as Item Type variants."""
-        return [self.table_type(*rec) for rec in self.data]
+        return [self.item_type(*rec) for rec in self.data]
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(name={self.name!r}, len={len(self)})'
