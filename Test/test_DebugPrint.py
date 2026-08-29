@@ -1,11 +1,9 @@
-import numpy as np
 import pytest
 
 from BitFlagArray import Bitty
-from DebugPrint import print_debug, _bit_letter, _superscript_letter, _subscript_number, _FILLED_CIRCLED, _EMPTY_CIRCLED
-from TextDisplayMeasure import TextDisplayMeasure
+from printing.DebugPrint import print_debug, _superscript_letter, _subscript_number, _FILLED_CIRCLED, _EMPTY_CIRCLED
 
-from showcase import test, long_data
+from printing.showcase import test, long_data
 
 @pytest.fixture
 def test_bitty():
@@ -104,7 +102,6 @@ def test2_closing_corner_at_arrow(bitty):
 
 
 def test2_index_sep_ends_with_clover(bitty):
-    from DebugPrint import _str_w
     for view, mode in [(bitty.b[[0, 2, 4]], "1/0"), (bitty.b[2], "sub")]:
         out = lines(view, mode)
         sep = out[1]
