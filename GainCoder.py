@@ -5,11 +5,11 @@ import torch
 import numpy as np
 from pathlib import Path
 
-from modelCompression.BitWriter import BitWriter
-from modelCompression.FramePrint import FramePrint
-from modelCompression.StBuilder import BeginItemOptions, ParentChildRelation, ItemClosingBeavior
-from modelCompression.commonEncoding import get_bits, get_number, symbol_to_str, get_bitmask
-from modelCompression.entropy import individual_entropy_optimized as individual_entropy_optimized
+from BitWriter import BitWriter
+from FramePrint import FramePrint
+from StBuilder import BeginItemOptions, ParentChildRelation, ItemClosingBeavior
+from commonEncoding import get_bits, get_number, symbol_to_str, get_bitmask
+from entropy import individual_entropy_optimized as individual_entropy_optimized
 
 
 def get_bit_count(value: int):
