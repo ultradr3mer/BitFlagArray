@@ -216,6 +216,11 @@ def test_table_slice_returns_range_variant(tbl):
     assert [int(v) for v in rng.bits.column] == [8, 16, 32, 64]
 
 
+def test_table_select_max(tbl):
+    selection = tbl.max.get_all(tbl.abs_min >= 341)
+    assert selection.size == 3
+
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v"]))
+
