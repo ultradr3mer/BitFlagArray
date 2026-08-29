@@ -132,7 +132,7 @@ class QueryableTable[TRowNRange](Table[TRowNRange]):
     def get_first(self, query: Query):
         """Item Type variant: first row matching the query."""
         first = get_first_or(query.indices, KeyError())
-        return self.table_type(*self.data[first])
+        return self.item_type(*self.data[first])
 
     if TYPE_CHECKING:
         # Column attrs are derived from the table type's shared field
@@ -149,7 +149,8 @@ TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
 
 class QTblSpecialCol[TRowNRange, SpecialColumnType](QueryableTable[TRowNRange]):
     result_dict: Dict[str, type]
-    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, table_type: type[TRowNRange]):
+    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer,
+                 table_type: type[TRowNRange] | None = None):
         super().__init__(name, data, table_type)
         self.ref_column = result_dict
 

@@ -1,13 +1,14 @@
 import numpy as np
 import pytest
-from typing import NamedTuple
+from typing import NamedTuple, get_type_hints
 
 from GenericTable import (
     NpColDef,
     get_defs_from_table_type,
     dtype_from_fields,
     Table,
-    table_type_from_fields,
+    TableFields,
+    table_item_from_fields,
     table_range_from_type,
     NpColTable,
     item_type_of,
@@ -68,14 +69,16 @@ def test_dtype_from_fields():
     assert dt['max'] == np.dtype(np.uint64)
 
 
-def test_table_type_from_fields():
-    class Fields:
-        kind: np.uint8
-        max: np.uint64
+def test_table_item_from_fields():
+    class DeclFields(TableFields):
+        kind: np.ndarray | np.uint8
+        max: np.ndarray | np.uint64
 
-    TType = table_type_from_fields('TType', Fields)
-    assert TType._fields == ('kind', 'max')
-    assert TType(1, 2).kind == 1
+    item = table_item_from_fields(DeclFields)
+    assert item.__name__ == "Decl"                       # 'Fields' suffix stripped
+    assert item._fields == ("kind", "max")
+    assert get_type_hints(item)["kind"] is np.uint8      # specific: item members only
+    assert get_type_hints(item)["max"] is np.uint64
 
 
 def test_table_range_from_type():
@@ -83,7 +86,12 @@ def test_table_range_from_type():
     assert rng_type.__name__ == "RowTypeRange"
     assert rng_type._fields == RowType._fields
     rng_type2 = table_range_from_type(DeclaredRow)
-    assert rng_type2.__annotations__['kind'] is np.ndarray
+    assert rng_type2.__annotations__["kind"] is np.ndarray
+
+
+def test_table_range_basename():
+    rng_type = table_range_from_type(RowType, basename="Other")
+    assert rng_type.__name__ == "OtherRange"
 
 
 # --------------------------------------------------------------------
@@ -154,6 +162,56 @@ def test_np_col_table_builds_declared_ranges():
                      data=[(1, 8)],
                      table_type=DeclaredRow)
     assert isinstance(tbl.kind, np.ndarray)   # declared range member
+
+
+# --------------------------------------------------------------------
+# Declaration-driven tables — variants derived inside the framework
+# --------------------------------------------------------------------
+
+def test_table_derives_from_inherited_declaration():
+    class DeclFields(TableFields):
+        kind: np.ndarray | np.uint8
+        bits: np.ndarray | np.uint8
+
+    class DeclTable(Table, DeclFields):
+        pass
+
+    tbl = DeclTable(name="decl", data=[(1, 8), (2, 16)])
+    assert tbl.table_type is DeclFields                       # the declaration IS the table type
+    assert tbl.item_type.__name__ == "Decl"
+    assert tbl.item_type._fields == ("kind", "bits")
+    assert get_type_hints(tbl.item_type)["kind"] is np.uint8      # item variant: specific scalars
+    assert tbl.range_type.__name__ == "DeclRange"
+    assert get_type_hints(tbl.range_type)["kind"] is np.ndarray   # range variant: specific ranges
+    assert tbl.item_type is DeclTable(name="x", data=[(3, 8)]).item_type  # stable, cached per declaration
+
+    row = tbl[0]
+    assert isinstance(row, tbl.item_type)
+    assert row.kind == np.uint8(1)
+    rng = tbl[0:1]
+    assert rng.__class__ is tbl.range_type
+    assert [int(v) for v in rng.kind] == [1]
+
+
+def test_table_without_type_or_declaration_raises():
+    class BareTable(Table):
+        pass
+
+    with pytest.raises(TypeError, match="TableFields"):
+        BareTable("bare", [(1,)])
+
+
+def test_explicit_table_type_beats_inherited_declaration():
+    class DeclFields(TableFields):
+        kind: np.ndarray | np.uint8
+        bits: np.ndarray | np.uint8
+
+    class DeclTable(Table, DeclFields):
+        pass
+
+    tbl = DeclTable(name="legacy", data=[(1, 0, 255, 8)], table_type=RowType)
+    assert tbl.table_type is RowType
+    assert tbl.item_type is RowType
 
 
 # --------------------------------------------------------------------
