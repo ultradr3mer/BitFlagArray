@@ -31,16 +31,22 @@ def item_type_of(hint: Any) -> Any:
     container) and its item (scalar cell) type. The item is the member with
     a concrete numpy dtype; ranges (ndarray subclasses, custom column
     classes) coerce to ``object`` and are skipped. Plain non-union hints
-    pass through unchanged.
+    pass through unchanged. Without a numpy member, an explicit
+    ``object``/``np.object_`` member declares a reference field (object
+    dtype).
     """
     if get_origin(hint) is not Union and not isinstance(hint, UnionType):
         return hint
-    for member in get_args(hint):
+    args = get_args(hint)
+    for member in args:
         try:
             member_dtype = np.dtype(member)
         except (TypeError, ValueError):
             continue
         if member_dtype != object:
+            return member
+    for member in args:
+        if member is np.object_ or member is object:
             return member
     raise TypeError(f"no item type in field hint: {hint!r}")
 

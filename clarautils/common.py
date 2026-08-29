@@ -4,6 +4,13 @@ from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, over
 import numpy as np
 import numpy.typing as npt
 
+def safe_iter(iter, default):
+    try:
+        return next(iter)
+    except StopIteration:
+        return default
+
+
 def get_first_or_default(value: Iterable):
     for item in value:
         return item
