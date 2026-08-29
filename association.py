@@ -8,8 +8,8 @@ import pandas as pd
 
 from mlxtend.frequent_patterns import fpgrowth, association_rules
 
-from BitFlagArray import Bitty, SliceView
-from commonEncoding import get_bits
+from clarautils.BitFlagArray import Bitty, SliceView
+from clarautils.commonEncoding import get_bits
 from reverseEncoding import IndexedBit, Association, add_rule, determined_indices
 
 

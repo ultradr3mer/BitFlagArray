@@ -2,7 +2,7 @@ from typing import List
 
 from wcwidth import wcwidth as _wcwidth, wcswidth as _wcswidth
 
-from BitFlagArray import SliceView, sliceTypes, get_indices
+from clarautils.BitFlagArray import SliceView, sliceTypes, get_indices
 
 _SUPERSCRIPT = {
     'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ',

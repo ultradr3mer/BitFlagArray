@@ -1,6 +1,6 @@
 import numpy as np
 
-from BitFlagArray import Bitty
+from clarautils.BitFlagArray import Bitty
 from DebugPrint import print_debug
 from TextDisplayMeasure import TextDisplayMeasure
 

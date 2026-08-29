@@ -4,8 +4,8 @@ from typing import Any, Literal, List, Dict, TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 
-from GenericTable import Table
-from common import ExceptionRaiser, get_first_or
+from .GenericTable import Table
+from .common import ExceptionRaiser, get_first_or
 
 #====================================================
 #               QUERY INFRASTRUCTURE

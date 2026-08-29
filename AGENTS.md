@@ -7,17 +7,24 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 - Der Nutzer schreibt Deutsch — auf Deutsch antworten, knapp und direkt.
 - Docstrings/Kommentare minimal halten — lange Docstrings löscht der Nutzer.
 
-## Modul-Landkarte (alte Imports sind umgezogen!)
+## Packaging
+- Die 7 Kern-Module liegen im Paket **`clarautils/`** (imports: `from clarautils import Bitty`, `from clarautils.commonTyping import ...`). Interne Imports im Paket sind **relativ** (`from .common import ...`).
+- Installierbar per `pyproject.toml` (setuptools, `numpy` als einzige Abhängigkeit): `pip install -e .` im Ziel-venv — Änderungen hier wirken sofort.
+- `clarautils/__init__.py` re-exportiert die Kern-API — neue öffentliche Namen dort UND in `__all__` ergänzen.
+- Repo-Rest (showcase, DebugPrint, association, reverseEncoding, GainCoder, Tests) importiert `clarautils.<Modul>` absolut.
+
+## Modul-Landkarte
 | Modul | Inhalt |
 |---|---|
-| `common.py` | `get_first_or`, `ExceptionRaiser`/`ExcRaiser`, `iter_bits` — **keine** `get_type_*` mehr |
-| `commonTyping.py` | `INTEGER_TYPES`, `get_type_for_scalar/array/bit_count`, `get_as_signed/unsigned`, `DTableFields`, `ExcRaiser`-Instanzen |
-| `GenericTable.py` | Table-Framework (`TableFields`, item/range-Varianten, `Table`) — hieß früher `GenricTable.py` |
-| `QueryableTable.py` | lazy `Query`/`Constraint`, `ConstraintColumn`=`CCol`, `QueryableTable`, `QTblSpecialCol`, `Undefined` |
-| `commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits` |
-| `BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, LRU-Cache |
-| `Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
+| `clarautils/common.py` | `get_first_or`, `ExceptionRaiser`/`ExcRaiser`, `iter_bits` — **keine** `get_type_*` mehr |
+| `clarautils/commonTyping.py` | `INTEGER_TYPES`, `get_type_for_scalar/array/bit_count`, `get_as_signed/unsigned`, `DTableFields`, `ExcRaiser`-Instanzen |
+| `clarautils/GenericTable.py` | Table-Framework (`TableFields`, item/range-Varianten, `Table`) — hieß früher `GenricTable.py` |
+| `clarautils/QueryableTable.py` | lazy `Query`/`Constraint`, `ConstraintColumn`=`CCol`, `QueryableTable`, `QTblSpecialCol`, `Undefined` |
+| `clarautils/commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits` |
+| `clarautils/BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, LRU-Cache |
+| `clarautils/Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
 | `Multislice.md` | Benchmarks + Faustregeln zur Bit-Selektion |
+| `GenericTableOld.py` | deprecated, Importblock auskommentiert — unberührt lassen |
 | `README.md` | **veraltet** (PlainTable/TableCreator-Ära) — nicht vertrauen |
 
 ## Kernkonzepte / Terminologie (vom Nutzer festgelegt)
@@ -56,7 +63,7 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 - **Bewusst defekt** (damalige Scope-Entscheidung, bei Bedarf mit dem Nutzer abklären): `Test/test_common.py`, `Test/test_DebugPrint.py` — stale `from common import get_type_for_*`.
 - `Test/test_perf*.py` sind Benchmarks (~50 s); `Test/conftest.py` hat eine autouse-Fixture, die BitFlagArray importiert.
 - Referenz ohne die beiden defekten + Perf: 209 passed.
-- Schnellster Smoke-Test: die `__main__`-Demos der Module laufen lassen (`GenericTable.py`, `QueryableTable.py`, `commonTyping.py`, `Mulitslice.py`).
+- Schnellster Smoke-Test: die `__main__`-Demos der Module laufen lassen: `& .\.venv\Scripts\python.exe -m clarautils.GenericTable` (analog `clarautils.QueryableTable`, `clarautils.commonTyping`, `clarautils.Mulitslice`).
 
 ## Workflow
 - **Nicht** committen/pushen — der Nutzer committet selbst ("update"-Nachrichten).

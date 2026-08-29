@@ -5,10 +5,10 @@ import torch
 import numpy as np
 from pathlib import Path
 
-from BitWriter import BitWriter
+# from BitWriter import BitWriter
 from FramePrint import FramePrint
 from StBuilder import BeginItemOptions, ParentChildRelation, ItemClosingBeavior
-from commonEncoding import get_bits, get_number, symbol_to_str, get_bitmask
+from clarautils.commonEncoding import get_bits, get_number, symbol_to_str, get_bitmask
 from entropy import individual_entropy_optimized as individual_entropy_optimized
 
 
@@ -440,16 +440,16 @@ class GainCoder:
         return sum(len(self.codes[v]) * c for v, c in zip(np.array(self.values), self.counts)) / total
 
     def compress_tree(self):
-        bw = BitWriter()
-        layer = [self.node.true_node, self.node.false_node]
-        while len(layer) > 0:
-            for n in layer:
-                # if isinstance(n, np.generic):
-                #     bw.put(False)
-                #     bw.put(n, length=self.leaf_ext)
-                # else:
-                #     bw.put(True)
-                # n.bit
+        # bw = BitWriter()
+        # layer = [self.node.true_node, self.node.false_node]
+        # while len(layer) > 0:
+        #     for n in layer:
+        #         # if isinstance(n, np.generic):
+        #         #     bw.put(False)
+        #         #     bw.put(n, length=self.leaf_ext)
+        #         # else:
+        #         #     bw.put(True)
+        #         # n.bit
                 pass
 
     def compression_ratio(self, original_bits=16):

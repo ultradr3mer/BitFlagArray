@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from Mulitslice import Multislice
-from commonEncoding import get_number, get_bits
+from clarautils.Mulitslice import Multislice
+from clarautils.commonEncoding import get_number, get_bits
 
 
 # ------------------------------------------------------------------ #

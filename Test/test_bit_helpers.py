@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from BitFlagArray import (
+from clarautils.BitFlagArray import (
     NBitAryOnly,
     limit_to_bit_count, select_bits, put_bits,
     merge_slices, normalize_key, get_indices, get_slice_item_count,

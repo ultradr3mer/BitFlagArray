@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from commonEncoding import get_bitmask
-from BitFlagArray import Bitty
+from clarautils.commonEncoding import get_bitmask
+from clarautils.BitFlagArray import Bitty
 
 
 def test_b_forces_bit_slice_next(bit_data):

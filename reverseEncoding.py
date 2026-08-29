@@ -7,9 +7,9 @@ from typing import NamedTuple, List, Tuple, Iterable, FrozenSet, Set, Dict
 import numpy as np
 import numpy.typing as npt
 
-from BitFlagArray import Bitty, NBitArray, SliceView
-from common import AccessibleAry
-from commonEncoding import get_bits, get_number
+from clarautils.BitFlagArray import Bitty, NBitArray, SliceView
+from clarautils.common import AccessibleAry
+from clarautils.commonEncoding import get_bits, get_number
 
 base = Path("bins")
 

@@ -1,8 +1,8 @@
 import numpy as np
 import numpy.typing as npt
 
-from commonTyping import get_type_for_bit_count, get_type_for_scalar, get_as_unsigned
-from commonEncoding import get_number, get_bits, CommonNBitAry
+from .commonTyping import get_type_for_bit_count, get_type_for_scalar, get_as_unsigned
+from .commonEncoding import get_number, get_bits, CommonNBitAry
 
 
 class Multislice:
