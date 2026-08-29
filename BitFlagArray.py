@@ -3,12 +3,11 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import List, Iterable, Tuple, Dict, Union
 import weakref
-import warnings
 
 import numpy as np
 import numpy.typing as npt
 
-from common import get_type_for_bit_count
+from commonTyping import get_type_for_bit_count
 from commonEncoding import get_bitmask, get_number, get_bits
 from commonEncoding import CommonNBitAry
 
@@ -91,7 +90,7 @@ def slices_to_indices(s) -> np.ndarray:
     if isinstance(s, slice):
         return np.arange(s.start, s.stop, dtype=np.intp)
     if isinstance(s, list):
-        return np.concatenate([np.arange(sl.src_start, sl.stop, dtype=np.intp) for sl in s])
+        return np.concatenate([np.arange(sl.start, sl.stop, dtype=np.intp) for sl in s])
     return np.asarray(s, dtype=np.intp)
 
 
@@ -290,7 +289,7 @@ def get_indices(key, length: int) -> List[int]:
     if isinstance(key, list):
         result = []
         for s in key:
-            result.extend(range(s.src_start, s.stop))
+            result.extend(range(s.start, s.stop))
         return result
     return list(key)
 
@@ -305,7 +304,7 @@ def set_index_array(array: np.ndarray, key, value):
     if isinstance(key, list) and all(isinstance(x, slice) for x in key):
         pos = 0
         for s in key:
-            n = s.stop - s.src_start
+            n = s.stop - s.start
             array[s] = value[pos:pos + n]
             pos += n
     else:
