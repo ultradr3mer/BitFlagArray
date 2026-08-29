@@ -152,34 +152,6 @@ class NpColTable[TRow](Table[TRow, NPContainerCreator]):
         super().__init__(name, data, row_type, col_a_cre=NPContainerCreator())
 
 #====================================================
-#               WITH SPECIAL COL
-#====================================================
-
-# SpecialColumnType = TypeVar('SpecialColumnType')
-type SpecialColumnType = Any
-TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
-
-class TblSpecialCol[TRow, SpecialColumnType, BaseTable: Table](BaseTable):
-    not_found_except: ExceptionRaiser[SpecialColumnType] = ExceptionRaiser(KeyError, "Not Found")
-    result_dict: Dict[str, type]
-    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, row_type: type[TRow]):
-        """
-
-        :rtype: None
-        """
-        super().__init__(name, data, row_type)
-        self.ref_column = result_dict
-
-    def get_first(self, key) -> SpecialColumnType:
-        all_items = self.get_all(key)
-        return get_first_or(all_items, self.not_found_except.do_raise())
-
-    def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
-        return self.ref_column[key]
-
-type NpTblSpecialCol[TRow, SpecialColumnType] = TblSpecialCol[TRow, SpecialColumnType, NpColTable]
-
-#====================================================
 #               DEMO
 #====================================================
 

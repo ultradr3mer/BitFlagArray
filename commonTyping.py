@@ -26,7 +26,7 @@ class DRow(NamedTuple):
 class TypeTable(QTblSpecialCol[DRow, Type[Any]]):
     def __init__(self, data: npt.ArrayLike, result_dict: npt.NDArray[Any]):
         super().__init__("IntegerTypeTable", data, result_dict, DRow)
-        self.kind, self.abs_min, self.max, self.bits = self.create_columns()
+        self.signed, self.abs_min, self.max, self.bits = self.create_columns()
 
 
 def build_type_tbl():
@@ -47,7 +47,6 @@ def build_type_tbl():
             np.iinfo(t).bits,
         ))
 
-    from GenricTable import NpTblWithResult
     return TypeTable(data=data, result_dict=types)
 
 
@@ -57,7 +56,7 @@ val = 123
 
 # `and`-trick form: no parens needed, `and` binds looser than comparisons.
 smallest = INTEGER_TYPES.get_first(
-    INTEGER_TYPES.kind == False
+    INTEGER_TYPES.signed == False
     & INTEGER_TYPES.max >= val
 )
 print("and-trick ->", smallest)
