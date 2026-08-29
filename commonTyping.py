@@ -1,8 +1,9 @@
-from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal, TYPE_CHECKING, Tuple
+from typing import TypeVar, Generic, Type, List, Iterable, Any, overload, Literal, TYPE_CHECKING, Tuple
 
 import numpy as np
 import numpy.typing as npt
 
+from GenricTable import row_type_from_fields
 from QueryableTable import QTblSpecialCol, CCol
 
 
@@ -10,29 +11,28 @@ from QueryableTable import QTblSpecialCol, CCol
 #                   TYPE DETECTION
 # ====================================================
 
-class DRow(NamedTuple):
-    signed: np.bool_
-    abs_min: np.uint64
-    max: np.uint64
-    bits: np.uint8
+class DRowFields:
+    """Single shared row/table declaration.
+
+    Each field is annotated ``CCol | scalar``: on the table it is a column
+    (``CCol``), on a row it is a scalar. ``TypeTable`` inherits this class,
+    so the fields exist statically on the table; ``DRow`` (the NamedTuple
+    rows) is generated from it - fields are declared exactly once.
+    """
+    signed: CCol | np.bool_
+    abs_min: CCol | np.uint64
+    max: CCol | np.uint64
+    bits: CCol | np.uint8
 
 
-# class NpTblWithResult:
-#     ...
-#
-#     def create_columns(self) -> List[Any]: ...
+DRow = row_type_from_fields('DRow', DRowFields)
 
 
-class TypeTable(QTblSpecialCol[DRow, Type[Any]]):
-    signed: CCol
-    abs_min: CCol
-    max: CCol
-    bits: CCol
+class TypeTable(QTblSpecialCol[DRow, Type[Any]], DRowFields):
+    """Inherits the shared DRowFields declaration - nothing redeclared here."""
 
     def __init__(self, data: npt.ArrayLike, result_dict: npt.NDArray[Any]):
         super().__init__("IntegerTypeTable", data, result_dict, DRow)
-        assert set(TypeTable.__annotations__) == set(DRow._fields), \
-            f"annotation drift: {set(TypeTable.__annotations__) ^ set(DRow._fields)}"
 
 
 

@@ -1,6 +1,6 @@
 import operator
 from dataclasses import dataclass
-from typing import Any, Literal, List, Dict
+from typing import Any, Literal, List, Dict, TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
@@ -120,9 +120,16 @@ class ConstraintColCreator(TColContainerCreator[ConstraintColumn]):
 #               QUERYABLE TABLE
 #====================================================
 
-class QueryableTable[TRow](Table[TRow, ConstraintColCreator]):
+class QueryableTable[TRow](Table[TRow]):
+    col_creator_cls = ConstraintColCreator
+
     def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
-        super().__init__(name, data, row_type, col_a_cre=ConstraintColCreator())
+        super().__init__(name, data, row_type)
+
+    if TYPE_CHECKING:
+        # Column attrs are derived from the row type's shared field
+        # declaration; for type checkers they are constraint columns.
+        def __getattr__(self, name: str) -> CCol: ...
 
 
 #====================================================
@@ -132,7 +139,7 @@ class QueryableTable[TRow](Table[TRow, ConstraintColCreator]):
 type SpecialColumnType = Any
 TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
 
-class QTblSpecialCol[TRow, SpecialColumnType](QueryableTable):
+class QTblSpecialCol[TRow, SpecialColumnType](QueryableTable[TRow]):
     result_dict: Dict[str, type]
     def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, row_type: type[TRow]):
         super().__init__(name, data, row_type)
