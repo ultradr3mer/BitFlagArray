@@ -5,7 +5,6 @@ import pytest
 
 from QueryableTable import (
     QueryableTable,
-    ConstraintColAdapter,
     ConstraintColumn,
     Constraint,
     Query,
@@ -55,7 +54,7 @@ def tbl(lookup_data) -> QueryableTable[TypeLookupRow]:
 
 def test_build(tbl):
     assert tbl.name == "TypeLookup"
-    assert tbl.row_type is TypeLookupRow
+    assert tbl.table_type is TypeLookupRow
     assert tbl.dtype.names == ('signed', 'abs_min', 'max', 'bits', 'prev_max')
     assert tbl.dtype['signed'] == np.dtype(np.bool_)
     assert tbl.dtype['max'] == np.dtype(np.uint64)
@@ -93,16 +92,16 @@ def test_rows_helper(tbl):
 
 
 def test_adapters_use_base_init(tbl):
-    adapter = tbl.adapter['signed']
-    assert isinstance(adapter, ConstraintColAdapter)
-    assert adapter.name == 'signed'
-    assert adapter.parent is tbl
+    # column attrs are the columns themselves; the adapter machinery is gone
+    assert tbl.signed is tbl.cols[0]
+    assert tbl.signed.name == 'signed'
+    assert tbl.signed.table is tbl.data
 
 
 def test_direct_construction_simple_row():
     stbl: QueryableTable[SimpleRow] = QueryableTable("simple", [(0, 10), (1, 20), (2, 30)], SimpleRow)
     assert stbl.name == "simple"
-    assert stbl.row_type is SimpleRow
+    assert stbl.table_type is SimpleRow
     assert len(stbl) == 3
     q = stbl.value >= 20
     assert list(q.indices) == [1, 2]
@@ -177,7 +176,7 @@ def test_query_intersection(tbl):
 
 
 # --------------------------------------------------------------------
-# Query execution — get_first / get_all on columns and tables
+# Query execution — get_first / get_all, Item / Range variants
 # --------------------------------------------------------------------
 
 def test_column_get_all(tbl):
@@ -189,18 +188,32 @@ def test_column_get_first(tbl):
     assert int(tbl.bits.get_first(tbl.signed == True)) == 8
 
 
-def test_table_get_all_rows(tbl):
-    rows = tbl.get_all(tbl.bits <= 8)
-    assert len(rows) == 2
-    assert all(int(r.bits) == 8 for r in rows)
-    assert all(isinstance(r, TypeLookupRow) for r in rows)
+def test_column_getitem_item_and_range(tbl):
+    assert int(tbl.bits[0]) == 8                                   # Item Type
+    rng = tbl.bits[1:3]                                             # Range Type variant
+    assert isinstance(rng, ConstraintColumn)
+    assert [int(v) for v in rng.column] == [16, 32]
 
 
-def test_table_get_first_row(tbl):
+def test_table_get_all_returns_range_variant(tbl):
+    rng = tbl.get_all(tbl.bits <= 8)
+    assert rng.__class__.__name__ == "TypeLookupRowRange"
+    assert [bool(v) for v in rng.signed.column] == [False, True]
+    assert [int(v) for v in rng.bits.column] == [8, 8]
+
+
+def test_table_get_first_returns_item_variant(tbl):
     row = tbl.get_first(tbl.signed == True)
     assert isinstance(row, TypeLookupRow)
     assert bool(row.signed) is True
     assert int(row.bits) == 8
+
+
+def test_table_slice_returns_range_variant(tbl):
+    rng = tbl[4:8]
+    assert rng.__class__.__name__ == "TypeLookupRowRange"
+    assert all(bool(v) for v in rng.signed.column)
+    assert [int(v) for v in rng.bits.column] == [8, 16, 32, 64]
 
 
 if __name__ == "__main__":

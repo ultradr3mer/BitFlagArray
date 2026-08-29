@@ -119,27 +119,30 @@ GenricTable:
 
 ```python
 from typing import NamedTuple
-from GenricTable import PlainTable
+from GenericTable import PlainTable
+
 
 class TypeRow(NamedTuple):
-    signed: np.bool
-    max:    np.uint64
-    bits:   np.uint8
+  signed: np.bool
+  max: np.uint64
+  bits: np.uint8
+
 
 class TypeTable(PlainTable[TypeRow]):
-    @classmethod
-    def get_row_type(cls) -> type[TypeRow]:
-        return TypeRow
+  @classmethod
+  def get_row_type(cls) -> type[TypeRow]:
+    return TypeRow
+
 
 tbl = TypeTable.build("types", [
-    (False, 255, 8),
-    (False, 65535, 16),
-    (True,  127,  8),
+  (False, 255, 8),
+  (False, 65535, 16),
+  (True, 127, 8),
 ])
 
-tbl.signed   # array([False, False, True])       ← attribute, not string
-tbl.max      # array([255, 65535, 127])
-tbl[0]       # TypeRow(signed=False, max=255, bits=8)  ← typed NamedTuple
+tbl.signed  # array([False, False, True])       ← attribute, not string
+tbl.max  # array([255, 65535, 127])
+tbl[0]  # TypeRow(signed=False, max=255, bits=8)  ← typed NamedTuple
 ```
 
 ### What goes in
@@ -228,10 +231,10 @@ TColContainerAdapter  (abstract adapter)
 is known to type checkers:
 
 ```python
-from GenricTable import TableCreator
+from GenericTable import TableCreator
 
 creator = TableCreator[TypeRow, TypeTable](TypeTable)
-tbl     = creator.build("types", data)   # type: TypeTable
+tbl = creator.build("types", data)  # type: TypeTable
 ```
 
 ### Use cases
@@ -395,7 +398,7 @@ signed_rows = [row for row in tbl if row.signed == True]
 
 ## Module reference
 
-### `GenricTable.py`
+### `GenericTable.py`
 
 | Name                        | Kind        | Description                              |
 |-----------------------------|-------------|------------------------------------------|
