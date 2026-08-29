@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable, Any, List, Tuple, overload
+from typing import Iterable, Any, List, NamedTuple, Tuple, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -188,4 +188,57 @@ def arrange_bits(values, take_indices):
         result = result + (1 << shift_to) * ((from_ary >> shift_from) & 1)
 
     return result
+
+
+def get_bitwise_entropy(a, bit_count=None) -> npt.NDArray[np.float32]:
+    from .BitFlagArray import NBitArray
+
+    if isinstance(a, NBitArray):
+        v = a.get_array()
+        bit_count = a.get_bit_count()
+    else:
+        v = a
+        if bit_count is None:
+            raise ValueError("bit_count is required for plain arrays")
+
+    v = np.asarray(v, dtype=np.int64).ravel()
+    if v.size == 0:
+        return np.zeros(bit_count, dtype=np.float32)
+
+    p = np.zeros(bit_count, dtype=np.float32)
+    for i in range(bit_count):
+        p[i] = np.mean((v >> (bit_count - 1 - i)) & 1)
+
+    entropy = np.zeros(bit_count, dtype=np.float32)
+    mask = (p > 0) & (p < 1)
+    pm = p[mask]
+    entropy[mask] = -pm * np.log2(pm) - (1 - pm) * np.log2(1 - pm)
+    return entropy
+
+
+class DefinedBit(NamedTuple):
+    idx: int
+    bit: int
+
+
+def get_defined_bits(a, bit_count=None) -> List[DefinedBit]:
+    """Bits that are constant over all items, as (idx, bit) pairs; MSB-first, without unpacking."""
+    from .BitFlagArray import NBitArray
+
+    if isinstance(a, NBitArray):
+        ary = a.get_array()
+        bit_count = a.get_bit_count()
+    else:
+        ary = np.asarray(a)
+        if bit_count is None:
+            raise ValueError("bit_count is required for plain arrays")
+
+    if len(ary) == 0:
+        return []
+
+    shifts = np.arange(bit_count - 1, -1, -1, dtype=np.intp)
+    and_bits = (int(np.bitwise_and.reduce(ary)) >> shifts) & 1
+    or_bits = (int(np.bitwise_or.reduce(ary)) >> shifts) & 1
+    idx = np.flatnonzero(and_bits == or_bits)
+    return [DefinedBit(int(i), int(b)) for i, b in zip(idx, and_bits[idx])]
 

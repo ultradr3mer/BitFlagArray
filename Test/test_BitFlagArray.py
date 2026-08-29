@@ -182,6 +182,14 @@ def test_get_defined_bits_mixed():
     assert bitty.get_defined_bits() == [DefinedBit(0, 0), DefinedBit(3, 1)]
 
 
+def test_get_bitwise_entropy_method():
+    bitty = BitFlagArray(np.array([0b1010, 0b0101], dtype=np.uint8), max_bit=4)
+    entropy = bitty.get_bitwise_entropy()
+    assert entropy.shape == (4,)
+    assert entropy.dtype == np.float32
+    np.testing.assert_allclose(entropy, np.ones(4), rtol=1e-6)
+
+
 def test_get_defined_bits_all_items_equal():
     bitty = BitFlagArray(np.array([5, 5, 5], dtype=np.uint8), max_bit=4)
     assert bitty.get_defined_bits() == [DefinedBit(0, 0), DefinedBit(1, 1), DefinedBit(2, 0), DefinedBit(3, 1)]
