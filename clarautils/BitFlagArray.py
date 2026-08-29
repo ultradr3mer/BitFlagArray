@@ -1,15 +1,15 @@
 from abc import abstractmethod, abstractproperty, ABC
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import List, Iterable, Tuple, Dict, Union, NamedTuple
+from typing import List, Iterable, Tuple, Dict, Union
 import weakref
 
 import numpy as np
 import numpy.typing as npt
 
 from .commonTyping import get_type_for_bit_count
-from .commonEncoding import get_bitmask, get_number, get_bits
-from .commonEncoding import CommonNBitAry
+from .commonEncoding import DefinedBit, get_bitmask, get_number, get_bits
+from .commonEncoding import get_bitwise_entropy, get_defined_bits, CommonNBitAry
 
 
 # ------------------------------------------------------------------ #
@@ -311,11 +311,6 @@ def set_index_array(array: np.ndarray, key, value):
         array[key] = value
 
 
-class DefinedBit(NamedTuple):
-    idx: int
-    bit: int
-
-
 class NBitArray(ABC):
     """Interface for arrays of variable item bit count."""
 
@@ -349,16 +344,13 @@ class NBitArray(ABC):
     def get_bitwise(self):
         return get_bits(self.get_array(), self.get_bit_count())
 
+    def get_bitwise_entropy(self) -> npt.NDArray[np.float32]:
+        """Per-bit Shannon entropy over all items; forwards to commonEncoding."""
+        return get_bitwise_entropy(self)
+
     def get_defined_bits(self) -> List[DefinedBit]:
         """Bits that are constant over all items, as (idx, bit) pairs; MSB-first, without unpacking."""
-        ary = self.get_array()
-        if len(ary) == 0:
-            return []
-        shifts = np.arange(self.get_bit_count() - 1, -1, -1, dtype=np.intp)
-        and_bits = (int(np.bitwise_and.reduce(ary)) >> shifts) & 1
-        or_bits = (int(np.bitwise_or.reduce(ary)) >> shifts) & 1
-        idx = np.flatnonzero(and_bits == or_bits)
-        return [DefinedBit(int(i), int(b)) for i, b in zip(idx, and_bits[idx])]
+        return get_defined_bits(self)
 
     @abstractproperty
     def b(self) -> SliceView:

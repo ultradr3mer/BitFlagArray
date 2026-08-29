@@ -4,9 +4,10 @@ import numpy as np
 import pytest
 from clarautils.commonEncoding import (
     get_bitmask, get_bit_count, get_number, get_bits,
-    bits_to_hex, hex_to_bits, arrange_bits,
+    bits_to_hex, hex_to_bits, arrange_bits, get_bitwise_entropy,
+    get_defined_bits, DefinedBit,
 )
-from clarautils.BitFlagArray import NBitAryOnly, put_bits
+from clarautils.BitFlagArray import NBitAryOnly, put_bits, Bitty
 
 
 def test_get_bitmask_no_start():
@@ -110,4 +111,69 @@ def test_arrange_bits_inverts_put_bits():
     arranged = arrange_bits(data, indices)
     back = put_bits(arranged, np.array(indices), 6)
     np.testing.assert_array_equal(back, data.get_array())
+
+
+def test_get_bitwise_entropy_plain_2arg():
+    v = np.array([0b00, 0b01, 0b01, 0b11], dtype=np.uint8)
+    entropy = get_bitwise_entropy(v, 2)
+    assert entropy.shape == (2,)
+    assert entropy.dtype == np.float32
+    expected = -0.25 * np.log2(0.25) - 0.75 * np.log2(0.75)
+    np.testing.assert_allclose(entropy, [expected, expected], rtol=1e-6)
+
+
+def test_get_bitwise_entropy_msb_first():
+    v = np.array([0b10, 0b11], dtype=np.uint8)
+    entropy = get_bitwise_entropy(v, 2)
+    np.testing.assert_allclose(entropy, [0.0, 1.0], rtol=1e-6)
+
+
+def test_get_bitwise_entropy_bitty():
+    b = Bitty(np.array([0b1010, 0b0101], dtype=np.uint8), max_bit=4)
+    entropy = get_bitwise_entropy(b)
+    assert entropy.shape == (4,)
+    np.testing.assert_allclose(entropy, np.ones(4), rtol=1e-6)
+
+
+def test_get_bitwise_entropy_nbit_ary_only():
+    data = NBitAryOnly(np.array([0b01, 0b01], dtype=np.uint8), 2)
+    np.testing.assert_allclose(get_bitwise_entropy(data), [0.0, 0.0], rtol=1e-6)
+
+
+def test_get_bitwise_entropy_slice_view():
+    b = Bitty(np.array([0b1010, 0b0101], dtype=np.uint8), max_bit=4)
+    sv = b.b[0:2]
+    entropy = get_bitwise_entropy(sv)
+    assert entropy.shape == (2,)
+    np.testing.assert_allclose(entropy, np.ones(2), rtol=1e-6)
+
+
+def test_get_bitwise_entropy_empty():
+    result = get_bitwise_entropy(np.array([], dtype=np.uint8), 5)
+    np.testing.assert_array_equal(result, np.zeros(5))
+    assert result.dtype == np.float32
+
+
+def test_get_bitwise_entropy_requires_bit_count():
+    with pytest.raises(ValueError):
+        get_bitwise_entropy(np.array([1, 2], dtype=np.uint8))
+
+
+def test_get_defined_bits_plain_2arg():
+    v = np.array([0b0001, 0b0011, 0b0101], dtype=np.uint8)
+    assert get_defined_bits(v, 4) == [DefinedBit(0, 0), DefinedBit(3, 1)]
+
+
+def test_get_defined_bits_nbit_ary():
+    data = NBitAryOnly(np.array([0b01, 0b01], dtype=np.uint8), 2)
+    assert get_defined_bits(data) == [DefinedBit(0, 0), DefinedBit(1, 1)]
+
+
+def test_get_defined_bits_empty():
+    assert get_defined_bits(np.array([], dtype=np.uint8), 4) == []
+
+
+def test_get_defined_bits_requires_bit_count():
+    with pytest.raises(ValueError):
+        get_defined_bits(np.array([1, 2], dtype=np.uint8))
 
