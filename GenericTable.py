@@ -91,7 +91,7 @@ def table_range_from_type(table_type: type, default_range: type = np.ndarray) ->
 #               TABLE BASE HIERARCHY
 #====================================================
 
-class Table[TTable]:
+class Table[TRowNRange]:
     """Structured table driven by its table type.
 
     The table type (a NamedTuple) declares each field once as
@@ -106,7 +106,7 @@ class Table[TTable]:
     def __init__(self,
                  name: str,
                  data: npt.ArrayLike,
-                 table_type: Type[TTable]):
+                 table_type: Type[TRowNRange]):
         self.name = name
         self.table_type = table_type
         self.fields = get_defs_from_table_type(table_type)
@@ -185,10 +185,10 @@ class Table[TTable]:
 #               NUMPY TABLE
 #====================================================
 
-class NpColTable[TTable](Table[TTable]):
+class NpColTable[TRowNRange](Table[TRowNRange]):
     """Plain numpy table: fields are ndarray columns."""
 
-    def __init__(self, name: str, data: npt.ArrayLike, table_type: type[TTable]):
+    def __init__(self, name: str, data: npt.ArrayLike, table_type: type[TRowNRange]):
         super().__init__(name, data, table_type)
 
     if TYPE_CHECKING:
