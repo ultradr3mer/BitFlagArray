@@ -1,7 +1,7 @@
 from abc import abstractmethod, abstractproperty, ABC
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import List, Iterable, Tuple, Dict, Union
+from typing import List, Iterable, Tuple, Dict, Union, NamedTuple
 import weakref
 
 import numpy as np
@@ -311,6 +311,11 @@ def set_index_array(array: np.ndarray, key, value):
         array[key] = value
 
 
+class DefinedBit(NamedTuple):
+    idx: int
+    bit: int
+
+
 class NBitArray(ABC):
     """Interface for arrays of variable item bit count."""
 
@@ -343,6 +348,17 @@ class NBitArray(ABC):
 
     def get_bitwise(self):
         return get_bits(self.get_array(), self.get_bit_count())
+
+    def get_defined_bits(self) -> List[DefinedBit]:
+        """Bits that are constant over all items, as (idx, bit) pairs; MSB-first, without unpacking."""
+        ary = self.get_array()
+        if len(ary) == 0:
+            return []
+        shifts = np.arange(self.get_bit_count() - 1, -1, -1, dtype=np.intp)
+        and_bits = (int(np.bitwise_and.reduce(ary)) >> shifts) & 1
+        or_bits = (int(np.bitwise_or.reduce(ary)) >> shifts) & 1
+        idx = np.flatnonzero(and_bits == or_bits)
+        return [DefinedBit(int(i), int(b)) for i, b in zip(idx, and_bits[idx])]
 
     @abstractproperty
     def b(self) -> SliceView:
