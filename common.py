@@ -82,8 +82,6 @@ class AccessibleAry(Generic[T_item]):
         self.inner.extend(param)
 
 
-
-
 def iter_bits(data):
     for byte in data:
         for i in range(8):
