@@ -117,7 +117,7 @@ CCol = ConstraintColumn
 #               QUERYABLE TABLE
 #====================================================
 
-class QueryableTable[TTable](Table[TTable]):
+class QueryableTable[TRowNRange](Table[TRowNRange]):
     """Table whose fields are lazy queryable ConstraintColumns."""
 
     default_range = ConstraintColumn
@@ -147,9 +147,9 @@ class QueryableTable[TTable](Table[TTable]):
 type SpecialColumnType = Any
 TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
 
-class QTblSpecialCol[TTable, SpecialColumnType](QueryableTable[TTable]):
+class QTblSpecialCol[TRowNRange, SpecialColumnType](QueryableTable[TRowNRange]):
     result_dict: Dict[str, type]
-    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, table_type: type[TTable]):
+    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, table_type: type[TRowNRange]):
         super().__init__(name, data, table_type)
         self.ref_column = result_dict
 

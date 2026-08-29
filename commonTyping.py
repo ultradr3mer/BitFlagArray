@@ -80,8 +80,9 @@ def _first_or_raise(query: Query, raiser: ExcRaiser[np.dtype]) -> np.dtype:
 
 def _get_type(value: int, attr: str, signed: "bool | Undefined" = False) -> np.dtype:
     """Smallest dtype of the family where row[attr] >= value."""
+    type_tbl = INTEGER_TYPES
     return _first_or_raise(
-        (INTEGER_TYPES.signed == signed) & (getattr(INTEGER_TYPES, attr) >= value),
+        (type_tbl.signed == signed) & (getattr(type_tbl, attr) >= value),
         exc_too_many_bits if attr == "bits" else exc_too_big,
     )
 
@@ -92,10 +93,11 @@ def _get_type_for_bounds(low: int, high: int, signed: "bool | Undefined" = False
     ``abs_min`` bounds the negative side (so -128 fits int8), ``max`` the
     positive one. ``low=0`` disables the negative bound (legacy unsigned).
     """
+    type_tbl = INTEGER_TYPES
     return _first_or_raise(
-        (INTEGER_TYPES.signed == signed)
-        & (INTEGER_TYPES.abs_min >= -low)
-        & (INTEGER_TYPES.max >= high),
+        (type_tbl.signed == signed)
+        & (type_tbl.abs_min >= -low)
+        & (type_tbl.max >= high),
         exc_too_big,
     )
 
