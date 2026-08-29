@@ -4,7 +4,7 @@ from typing import Iterable, Any, List, Tuple, overload
 import numpy as np
 import numpy.typing as npt
 
-from common import get_type_for_array, get_type_for_bit_count, get_as_unsigned, get_as_signed
+from commonTyping import get_type_for_array, get_type_for_bit_count, get_as_unsigned, get_as_signed
 
 
 @dataclass(frozen=True)
