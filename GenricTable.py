@@ -92,6 +92,7 @@ class Table[TRow, TCreator: TColContainerCreator]:
         self.data = np.array(data, dtype=dtype_from_fields(self.fields))
         self.col_creator = col_a_cre
         self._cols = self.create_cols_set_attr()
+        self._check_col_attrs()
 
     def create_cols_set_attr(self):
         cols = self.create_columns()
@@ -109,6 +110,14 @@ class Table[TRow, TCreator: TColContainerCreator]:
             cols.append(col)
         self.adapter = adapter_dict
         return cols
+
+    def _check_col_attrs(self) -> None:
+        names = [f.name for f in self.fields]
+        assert names == list(self.row_type._fields), \
+            f"field names mismatch: {names} != {list(self.row_type._fields)}"
+        for i, name in enumerate(names):
+            assert getattr(self, name, None) is self._cols[i], \
+                f"column attr {name!r} does not hold its column (index {i})"
 
     @property
     def cols(self) -> List[Any]:
