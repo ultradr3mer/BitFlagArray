@@ -26,7 +26,8 @@ class DRow(NamedTuple):
 class TypeTable(QTblSpecialCol[DRow, Type[Any]]):
     def __init__(self, data: npt.ArrayLike, result_dict: npt.NDArray[Any]):
         super().__init__("IntegerTypeTable", data, result_dict, DRow)
-        self.signed, self.abs_min, self.max, self.bits = self.create_columns()
+        self.cols = (self.signed, self.abs_min, self.max, self.bits) = self.cols
+
 
 
 def build_type_tbl():

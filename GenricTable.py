@@ -85,20 +85,19 @@ class Table[TRow, TCreator: TColContainerCreator]:
                  name: str,
                  data: npt.ArrayLike,
                  row_type: Type[TRow],
-                 col_a_cre: TCreator,
-                 auto_create_cols: bool = True):
+                 col_a_cre: TCreator):
         self.name = name
         self.row_type = row_type
         self.fields = get_defs_from_rowtype(row_type)
         self.data = np.array(data, dtype=dtype_from_fields(self.fields))
         self.col_creator = col_a_cre
-
-        if auto_create_cols:
-            self.create_cols_set_attr()
+        self._cols = self.create_cols_set_attr()
 
     def create_cols_set_attr(self):
-        for c, f in zip(self.create_columns(), self.fields):
+        cols = self.create_columns()
+        for c, f in zip(cols, self.fields):
             setattr(self, f.name, c)
+        return cols
 
     def create_columns(self) -> List[TColContainer]:
         adapter_dict: Dict[str, TColContainerAdapter] = {}
@@ -110,6 +109,14 @@ class Table[TRow, TCreator: TColContainerCreator]:
             cols.append(col)
         self.adapter = adapter_dict
         return cols
+
+    @property
+    def cols(self) -> List[Any]:
+        return self._cols
+
+    @cols.setter
+    def cols(self, value):
+        self._cols = value
 
     @property
     def dtype(self) -> np.dtype[Any]:
