@@ -5,8 +5,7 @@ from typing import Any, Literal
 import numpy as np
 import numpy.typing as npt
 
-from GenricTable import Table, TColContainerAdapter, TColContainerCreator
-
+from GenricTable import Table, TColContainerAdapter, TColContainerCreator, TblSpecialCol
 
 #====================================================
 #               QUERY INFRASTRUCTURE
@@ -124,6 +123,7 @@ class QueryableTable[TRow](Table[TRow, ConstraintColCreator]):
     def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
         super().__init__(name, data, row_type, col_a_cre=ConstraintColCreator())
 
+type QTblSpecialCol[TRow, SpecialColumnType] = TblSpecialCol[TRow, SpecialColumnType, QueryableTable]
 
 #====================================================
 #               DEMO

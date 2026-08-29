@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Any, get_type_hints, TypeVar, Type, Generic, Dict
+from typing import NamedTuple, Any, get_type_hints, TypeVar, Type, Generic, Dict, List
 
 import numpy as np
 import numpy.typing as npt
+
+from common import ExceptionRaiser, get_first_or
 
 
 #====================================================
@@ -83,22 +85,31 @@ class Table[TRow, TCreator: TColContainerCreator]:
                  name: str,
                  data: npt.ArrayLike,
                  row_type: Type[TRow],
-                 col_a_cre: Type[TCreator] | TCreator):
+                 col_a_cre: TCreator,
+                 auto_create_cols: bool = True):
         self.name = name
         self.row_type = row_type
         self.fields = get_defs_from_rowtype(row_type)
         self.data = np.array(data, dtype=dtype_from_fields(self.fields))
-        self.col_creator = col_a_cre() if isinstance(col_a_cre, type) else col_a_cre
-        self.adapter = self.create_columns()
+        self.col_creator = col_a_cre
 
-    def create_columns(self) -> Dict[str, TColContainerAdapter]:
+        if auto_create_cols:
+            self.create_cols_set_attr()
+
+    def create_cols_set_attr(self):
+        for c, f in zip(self.create_columns(), self.fields):
+            setattr(self, f.name, c)
+
+    def create_columns(self) -> List[TColContainer]:
         adapter_dict: Dict[str, TColContainerAdapter] = {}
+        cols = []
         for f in self.fields:
             adapter = self.col_creator.get_adapter(parent=self, name=f.name)
             adapter_dict[f.name] = adapter
             col = adapter.init_column(self.data, f.type)
-            setattr(self, f.name, col)
-        return adapter_dict
+            cols.append(col)
+        self.adapter = adapter_dict
+        return cols
 
     @property
     def dtype(self) -> np.dtype[Any]:
@@ -129,6 +140,45 @@ class Table[TRow, TCreator: TColContainerCreator]:
         return f'{type(self).__name__}(name={self.name!r}, len={len(self)})'
 
 
+
+
+#====================================================
+#               NUMPY TABLE
+#====================================================
+
+
+class NpColTable[TRow](Table[TRow, NPContainerCreator]):
+    def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
+        super().__init__(name, data, row_type, col_a_cre=NPContainerCreator())
+
+#====================================================
+#               WITH SPECIAL COL
+#====================================================
+
+# SpecialColumnType = TypeVar('SpecialColumnType')
+type SpecialColumnType = Any
+TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
+
+class TblSpecialCol[TRow, SpecialColumnType, BaseTable: Table](BaseTable):
+    not_found_except: ExceptionRaiser[SpecialColumnType] = ExceptionRaiser(KeyError, "Not Found")
+    result_dict: Dict[str, type]
+    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, row_type: type[TRow]):
+        """
+
+        :rtype: None
+        """
+        super().__init__(name, data, row_type)
+        self.ref_column = result_dict
+
+    def get_first(self, key) -> SpecialColumnType:
+        all_items = self.get_all(key)
+        return get_first_or(all_items, self.not_found_except.do_raise())
+
+    def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
+        return self.ref_column[key]
+
+type NpTblSpecialCol[TRow, SpecialColumnType] = TblSpecialCol[TRow, SpecialColumnType, NpColTable]
+
 #====================================================
 #               DEMO
 #====================================================
@@ -140,19 +190,16 @@ if __name__ == "__main__":
         max: np.uint64
         bits: np.uint8
 
-
-    tbl1 = Table(name="test",
-                 data=[(1, 0, 255, 8), (2, 1, 65535, 16)],
-                 row_type=RowType,
-                 col_a_cre=NPContainerCreator())
+    tbl1 = NpColTable(name="test",
+                     data=[(1, 0, 255, 8), (2, 1, 65535, 16)],
+                     row_type=RowType)
 
     print("plain ->", tbl1.name, tbl1.dtype, len(tbl1))
     print("row 0 ->", tbl1[0])
     print("max  ->", tbl1.max)
 
-    tbl2 = Table(name="via_creator",
-                 data=[(1, 0, 255, 8), (1, 0, 255, 8), (2, 1, 65535, 16)],
-                 row_type=RowType,
-                 col_a_cre=NPContainerCreator())
+    tbl2 = NpColTable(name="via_creator",
+                         data=[(1, 0, 255, 8), (1, 0, 255, 8), (2, 1, 65535, 16)],
+                         row_type=RowType)
 
     print("creator ->", tbl2.name, tbl2[0])
