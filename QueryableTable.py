@@ -1,11 +1,12 @@
 import operator
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, List, Dict
 
 import numpy as np
 import numpy.typing as npt
 
-from GenricTable import Table, TColContainerAdapter, TColContainerCreator, TblSpecialCol
+from GenricTable import Table, TColContainerAdapter, TColContainerCreator
+from common import ExceptionRaiser, get_first_or
 
 #====================================================
 #               QUERY INFRASTRUCTURE
@@ -123,7 +124,27 @@ class QueryableTable[TRow](Table[TRow, ConstraintColCreator]):
     def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
         super().__init__(name, data, row_type, col_a_cre=ConstraintColCreator())
 
-type QTblSpecialCol[TRow, SpecialColumnType] = TblSpecialCol[TRow, SpecialColumnType, QueryableTable]
+
+#====================================================
+#               WITH SPECIAL COL
+#====================================================
+
+type SpecialColumnType = Any
+TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
+
+class QTblSpecialCol[TRow, SpecialColumnType](QueryableTable):
+    not_found_except: ExceptionRaiser[SpecialColumnType] = ExceptionRaiser(KeyError, "Not Found")
+    result_dict: Dict[str, type]
+    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, row_type: type[TRow]):
+        super().__init__(name, data, row_type)
+        self.ref_column = result_dict
+
+    def get_first(self, key) -> SpecialColumnType:
+        all_items = self.get_all(key)
+        return get_first_or(all_items, self.not_found_except.do_raise())
+
+    def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
+        return self.ref_column[key]
 
 #====================================================
 #               DEMO
