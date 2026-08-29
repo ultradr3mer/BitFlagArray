@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from clarautils.BitFlagArray import BitFlagArray, Bitty
+from clarautils.BitFlagArray import BitFlagArray, Bitty, DefinedBit
 from clarautils.commonTyping import get_type_for_bit_count
 
 
@@ -175,3 +175,47 @@ def test_len_and_item_count(bit_data):
     bitty = Bitty.stack_bit(bit_data)
     assert len(bitty) == 6
     assert bitty.get_item_count() == 6
+
+
+def test_get_defined_bits_mixed():
+    bitty = BitFlagArray(np.array([0b0001, 0b0011, 0b0101], dtype=np.uint8), max_bit=4)
+    assert bitty.get_defined_bits() == [DefinedBit(0, 0), DefinedBit(3, 1)]
+
+
+def test_get_defined_bits_all_items_equal():
+    bitty = BitFlagArray(np.array([5, 5, 5], dtype=np.uint8), max_bit=4)
+    assert bitty.get_defined_bits() == [DefinedBit(0, 0), DefinedBit(1, 1), DefinedBit(2, 0), DefinedBit(3, 1)]
+
+
+def test_get_defined_bits_single_item():
+    bitty = BitFlagArray(np.array([0b101], dtype=np.uint8), max_bit=3)
+    assert bitty.get_defined_bits() == [DefinedBit(0, 1), DefinedBit(1, 0), DefinedBit(2, 1)]
+
+
+def test_get_defined_bits_no_items():
+    bitty = BitFlagArray(np.array([], dtype=np.uint8), max_bit=4)
+    assert bitty.get_defined_bits() == []
+
+
+def test_get_defined_bits_matches_bitwise_reference():
+    rng = np.random.default_rng(42)
+    for bc in (1, 3, 8, 12, 16, 32):
+        vals = rng.integers(0, 2 ** bc, size=50, dtype=np.uint64)
+        for c in rng.choice(bc, size=max(1, bc // 4), replace=False):
+            m = np.uint64(1 << (bc - 1 - int(c)))
+            if int(rng.integers(2)):
+                vals |= m
+            else:
+                vals &= ~m
+        bitty = Bitty(vals.astype(get_type_for_bit_count(bc)), max_bit=bc)
+        bits = bitty.get_bitwise()
+        expected = [(c, int(bits[0, c])) for c in range(bc) if (bits[:, c] == bits[0, c]).all()]
+        assert bitty.get_defined_bits() == expected
+
+
+def test_get_defined_bits_on_views():
+    bitty = BitFlagArray(np.array([0b0001, 0b0011, 0b0101, 0b0111], dtype=np.uint8), max_bit=4)
+    without_defined = bitty.rm_b([0, 3])
+    assert without_defined.get_defined_bits() == []
+    subset = bitty.i[[0, 1]]
+    assert subset.get_defined_bits() == [DefinedBit(0, 0), DefinedBit(1, 0), DefinedBit(3, 1)]
