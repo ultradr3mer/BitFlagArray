@@ -16,7 +16,7 @@ from QueryableTable import (
 # --------------------------------------------------------------------
 
 class TypeLookupRow(NamedTuple):
-    signed: np.bool
+    signed: np.bool_
     abs_min: np.uint64
     max: np.uint64
     bits: np.uint8
@@ -55,7 +55,7 @@ def test_build(tbl):
     assert tbl.name == "TypeLookup"
     assert tbl.row_type is TypeLookupRow
     assert tbl.dtype.names == ('signed', 'abs_min', 'max', 'bits', 'prev_max')
-    assert tbl.dtype['signed'] == np.dtype(np.bool)
+    assert tbl.dtype['signed'] == np.dtype(np.bool_)
     assert tbl.dtype['max'] == np.dtype(np.uint64)
 
 

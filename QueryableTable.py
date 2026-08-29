@@ -133,7 +133,6 @@ type SpecialColumnType = Any
 TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
 
 class QTblSpecialCol[TRow, SpecialColumnType](QueryableTable):
-    not_found_except: ExceptionRaiser[SpecialColumnType] = ExceptionRaiser(KeyError, "Not Found")
     result_dict: Dict[str, type]
     def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, row_type: type[TRow]):
         super().__init__(name, data, row_type)
@@ -141,9 +140,11 @@ class QTblSpecialCol[TRow, SpecialColumnType](QueryableTable):
 
     def get_first(self, key) -> SpecialColumnType:
         all_items = self.get_all(key)
-        return get_first_or(all_items, self.not_found_except.do_raise())
+        return get_first_or(all_items, KeyError())
 
     def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
+        if isinstance(key, ConstraintSelection):
+            key = key.indices
         return self.ref_column[key]
 
 #====================================================
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     from typing import NamedTuple
 
     class TypeLookupRow(NamedTuple):
-        signed: np.bool
+        signed: np.bool_
         abs_min: np.uint64
         max: np.uint64
         bits: np.uint8

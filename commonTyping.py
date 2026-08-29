@@ -3,7 +3,7 @@ from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, over
 import numpy as np
 import numpy.typing as npt
 
-from QueryableTable import QTblSpecialCol
+from QueryableTable import QTblSpecialCol, CCol
 
 
 # ====================================================
@@ -11,7 +11,7 @@ from QueryableTable import QTblSpecialCol
 # ====================================================
 
 class DRow(NamedTuple):
-    signed: np.bool
+    signed: np.bool_
     abs_min: np.uint64
     max: np.uint64
     bits: np.uint8
@@ -24,9 +24,15 @@ class DRow(NamedTuple):
 
 
 class TypeTable(QTblSpecialCol[DRow, Type[Any]]):
+    signed: CCol
+    abs_min: CCol
+    max: CCol
+    bits: CCol
+
     def __init__(self, data: npt.ArrayLike, result_dict: npt.NDArray[Any]):
         super().__init__("IntegerTypeTable", data, result_dict, DRow)
-        self.cols = (self.signed, self.abs_min, self.max, self.bits) = self.cols
+        assert set(TypeTable.__annotations__) == set(DRow._fields), \
+            f"annotation drift: {set(TypeTable.__annotations__) ^ set(DRow._fields)}"
 
 
 
@@ -53,25 +59,26 @@ def build_type_tbl():
 
 INTEGER_TYPES = build_type_tbl()
 
-val = 123
+if __name__ == "__main__":
+    val = 123
 
-# `and`-trick form: no parens needed, `and` binds looser than comparisons.
-smallest = INTEGER_TYPES.get_first(
-    INTEGER_TYPES.signed == False
-    & INTEGER_TYPES.max >= val
-)
-print("and-trick ->", smallest)
+    # `and`-trick form: no parens needed, `and` binds looser than comparisons.
+    smallest = INTEGER_TYPES.get_first(
+        INTEGER_TYPES.signed == False
+        and INTEGER_TYPES.max >= val
+    )
+    print("and-trick ->", smallest)
 
-rows = [t for t in INTEGER_TYPES if t.signed == True]
-print("signed rows ->", rows)
-print("row 0 ->", INTEGER_TYPES[0])
-print("len ->", len(INTEGER_TYPES))
+    rows = [t for t in INTEGER_TYPES if t.signed == True]
+    print("signed rows ->", rows)
+    print("row 0 ->", INTEGER_TYPES[0])
+    print("len ->", len(INTEGER_TYPES))
 
-# `&`-pipeline form (explicit, no bool magic): same result.
-smallest_alt = (
-                       (((INTEGER_TYPES.signed == False) & INTEGER_TYPES.max) >= val)
-               ) < val
-print("pipeline  ->", smallest_alt)
+    # `&`-pipeline form (explicit, no bool magic): same result.
+    smallest_alt = (
+                           (((INTEGER_TYPES.signed == False) & INTEGER_TYPES.max) >= val)
+                   ) < val
+    print("pipeline  ->", smallest_alt)
 
 
 def _get_type(value: int, attr: str, signed: bool = False):

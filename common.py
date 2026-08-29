@@ -13,6 +13,8 @@ def get_first_or_default(value: Iterable):
 def get_first_or(value: Iterable, other: Any):
     for item in value:
         return item
+    if isinstance(other, Exception):
+        raise other
     return other
 
 T_ex = TypeVar('T_ex', bound=Exception)

@@ -109,6 +109,23 @@ def test_table_field_names(tbl):
     assert tbl._field_names == ['kind', 'abs_min', 'max', 'bits']
 
 
+# --------------------------------------------------------------------
+# Table — column attribute integrity check
+# --------------------------------------------------------------------
+
+def test_table_col_attrs_identity(tbl):
+    assert tbl.kind is tbl.cols[0]
+    assert tbl.abs_min is tbl.cols[1]
+    assert tbl.max is tbl.cols[2]
+    assert tbl.bits is tbl.cols[3]
+
+
+def test_check_col_attrs_fires_on_tampered_attr(tbl):
+    tbl.kind = tbl.bits
+    with pytest.raises(AssertionError):
+        tbl._check_col_attrs()
+
+
 def test_table_getitem_int(tbl):
     row = tbl[0]
     assert isinstance(row, RowType)
