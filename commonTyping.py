@@ -3,7 +3,7 @@ from typing import TypeVar, Generic, Type, List, Iterable, Any, overload, Litera
 import numpy as np
 import numpy.typing as npt
 
-from GenricTable import row_type_from_fields
+from GenericTable import table_type_from_fields
 from QueryableTable import QTblSpecialCol, CCol, Query, Undefined
 from common import ExcRaiser
 
@@ -12,13 +12,14 @@ from common import ExcRaiser
 #                   TYPE DETECTION
 # ====================================================
 
-class DRowFields:
-    """Single shared row/table declaration.
+class DTableFields:
+    """Single shared table type declaration.
 
-    Each field is annotated ``CCol | scalar``: on the table it is a column
-    (``CCol``), on a row it is a scalar. ``TypeTable`` inherits this class,
-    so the fields exist statically on the table; ``DRow`` (the NamedTuple
-    rows) is generated from it - fields are declared exactly once.
+    Each field is declared once as ``Range | Item`` (``CCol | scalar``):
+    the table exposes the range members as columns, a row holds the item
+    types. ``TypeTable`` inherits this class so the fields exist
+    statically on the table; ``DTable`` (the table type, its Item
+    variant) is generated from it.
     """
     signed: CCol | np.bool_
     abs_min: CCol | np.uint64
@@ -26,14 +27,14 @@ class DRowFields:
     bits: CCol | np.uint8
 
 
-DRow = row_type_from_fields('DRow', DRowFields)
+DTable = table_type_from_fields('DTable', DTableFields)
 
 
-class TypeTable(QTblSpecialCol[DRow, Type[Any]], DRowFields):
-    """Inherits the shared DRowFields declaration - nothing redeclared here."""
+class TypeTable(QTblSpecialCol[DTable, Type[Any]], DTableFields):
+    """Inherits the shared DTableFields declaration - nothing redeclared here."""
 
     def __init__(self, data: npt.ArrayLike, result_dict: npt.NDArray[Any]):
-        super().__init__("IntegerTypeTable", data, result_dict, DRow)
+        super().__init__("IntegerTypeTable", data, result_dict, DTable)
 
 
 
@@ -188,6 +189,10 @@ def get_as_unsigned(
 # ====================================================
 
 if __name__ == "__main__":
+    print("item  ->", INTEGER_TYPES[0])
+    print("range ->", INTEGER_TYPES[4:8])
+    print()
+
     print("scalar 255 unsigned ->", get_type_for_scalar(255))
     print("scalar 256 unsigned ->", get_type_for_scalar(256))
     print("scalar -128 signed  ->", get_type_for_scalar(-128, signed=True))

@@ -4,7 +4,7 @@ from typing import Any, Literal, List, Dict, TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 
-from GenricTable import Table, TColContainerAdapter, TColContainerCreator
+from GenericTable import Table
 from common import ExceptionRaiser, get_first_or
 
 #====================================================
@@ -73,7 +73,12 @@ class ConstraintColumn:
         self.column = data if selector is None else data[selector]
 
     def __getitem__(self, key):
-        return self.column[key]
+        if isinstance(key, (int, np.integer)):
+            return self.column[key]                          # Item Type
+        return ConstraintColumn(self.table[key], self.name)  # Range Type variant
+
+    def __repr__(self) -> str:
+        return f"CCol({self.name}): {self.column!r}"
 
     def __eq__(self, value: object) -> Constraint:  # type: ignore[override]
         return Constraint(self, operator.eq, value)
@@ -109,43 +114,28 @@ CCol = ConstraintColumn
 
 
 #====================================================
-#               CONSTRAINT COLUMN ADAPTER
-#====================================================
-
-class ConstraintColAdapter(TColContainerAdapter[ConstraintColumn, Any]):
-    """Adapter for ConstraintColumn columns."""
-
-    def init_column(self, ary: np.ndarray, cell_type: type[Any]) -> ConstraintColumn:
-        return ConstraintColumn(ary, self.name)
-
-
-class ConstraintColCreator(TColContainerCreator[ConstraintColumn]):
-    """Factory for ConstraintColumn column adapters."""
-
-    def get_adapter(self, parent: Table, name: str) -> ConstraintColAdapter:
-        return ConstraintColAdapter(parent, name)
-
-
-#====================================================
 #               QUERYABLE TABLE
 #====================================================
 
-class QueryableTable[TRow](Table[TRow]):
-    col_creator_cls = ConstraintColCreator
+class QueryableTable[TTable](Table[TTable]):
+    """Table whose fields are lazy queryable ConstraintColumns."""
 
-    def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
-        super().__init__(name, data, row_type)
+    default_range = ConstraintColumn
 
-    def get_all(self, query: Query) -> List[Any]:
-        """All rows matching the query (full column combination)."""
+    def build_column(self, data: np.ndarray, name: str) -> ConstraintColumn:
+        return ConstraintColumn(data, name)
+
+    def get_all(self, query: Query):
+        """Range Type variant of the table matching the query."""
         return self[query.indices]
 
-    def get_first(self, query: Query) -> Any:
-        """First row matching the query."""
-        return get_first_or(self.get_all(query), KeyError())
+    def get_first(self, query: Query):
+        """Item Type variant: first row matching the query."""
+        first = get_first_or(query.indices, KeyError())
+        return self.table_type(*self.data[first])
 
     if TYPE_CHECKING:
-        # Column attrs are derived from the row type's shared field
+        # Column attrs are derived from the table type's shared field
         # declaration; for type checkers they are constraint columns.
         def __getattr__(self, name: str) -> CCol: ...
 
@@ -157,10 +147,10 @@ class QueryableTable[TRow](Table[TRow]):
 type SpecialColumnType = Any
 TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
 
-class QTblSpecialCol[TRow, SpecialColumnType](QueryableTable[TRow]):
+class QTblSpecialCol[TTable, SpecialColumnType](QueryableTable[TTable]):
     result_dict: Dict[str, type]
-    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, row_type: type[TRow]):
-        super().__init__(name, data, row_type)
+    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer, table_type: type[TTable]):
+        super().__init__(name, data, table_type)
         self.ref_column = result_dict
 
     def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
@@ -194,20 +184,22 @@ if __name__ == "__main__":
         max: np.uint64
         bits: np.uint8
 
-    qtbl = QueryableTable(name="TypeLookup", data=build_type_table(), row_type=TypeLookupRow)
+    qtbl = QueryableTable(name="TypeLookup", data=build_type_table(), table_type=TypeLookupRow)
     print("direct  ->", qtbl.name, qtbl.dtype, "len:", len(qtbl))
-    print("row 0:", qtbl[0])
+    print("item    ->", qtbl[0])
+    print("range   ->", qtbl[4:6])
 
     q = qtbl.signed == False
     print("signed == False ->", q.indices)
 
     val = 255
     smallest = (qtbl.signed == False) & (qtbl.max >= val)
-    print("smallest unsigned for", val, "->", qtbl.get_all(smallest))
+    print("get_first ->", qtbl.get_first(smallest))
+    print("get_all max ->", qtbl.get_all(smallest).max.column)
 
     # every column can select values; queries compose before they evaluate
     print("max.get_first   ->", qtbl.max.get_first(qtbl.signed == True))
-    print("rows or-query   ->", qtbl.get_all((qtbl.bits <= 8) | (qtbl.max >= 2**32)))
+    print("or-query item   ->", qtbl.get_first((qtbl.bits <= 8) | (qtbl.max >= 2**32)))
 
     signed_rows = [t for t in qtbl if t.signed == True]
     print("signed rows:", len(signed_rows))
