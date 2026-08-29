@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Any, get_type_hints, TypeVar, Type, Generic, Dict, List
+from types import UnionType
+from typing import NamedTuple, Any, get_type_hints, get_args, get_origin, Union, TypeVar, Type, Generic, Dict, List, TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
@@ -19,14 +20,50 @@ class NpColDef(NamedTuple):
         return f"(NpCol {self.name}: {self.type})"
 
 
+def scalar_from_hint(hint: Any) -> Any:
+    """Scalar member of a ``Column | scalar`` field hint.
+
+    A shared row/table declaration annotates each field as the union of its
+    column container and its scalar cell type. The scalar is the member with a
+    concrete numpy dtype; column containers (ndarray subclasses, custom column
+    classes) coerce to ``object`` and are skipped. Plain non-union hints pass
+    through unchanged.
+    """
+    if get_origin(hint) is not Union and not isinstance(hint, UnionType):
+        return hint
+    for member in get_args(hint):
+        try:
+            member_dtype = np.dtype(member)
+        except (TypeError, ValueError):
+            continue
+        if member_dtype != object:
+            return member
+    raise TypeError(f"no scalar member in field hint: {hint!r}")
+
+
 def get_defs_from_rowtype(row_type: type) -> list[NpColDef]:
-    """Derive column definitions from a NamedTuple row type's annotations."""
+    """Derive column definitions from a NamedTuple row type's annotations.
+
+    Fields may be declared once, shared by table and row, as ``Col | scalar``
+    unions; the scalar member defines the column dtype.
+    """
     hints = get_type_hints(row_type)
-    return [NpColDef(name, np.dtype(hints[name])) for name in row_type._fields]
+    return [NpColDef(name, np.dtype(scalar_from_hint(hints[name]))) for name in row_type._fields]
 
 
 def dtype_from_fields(fields: list[NpColDef]) -> np.dtype[Any]:
     return np.dtype([(f.name, f.type) for f in fields])
+
+
+def row_type_from_fields(typename: str, fields_cls: type) -> type:
+    """Build a NamedTuple row type from a plain shared fields-class.
+
+    Companion to the shared declaration pattern: the fields-class declares
+    each field once as ``Col | scalar``, the table inherits the class so
+    the fields exist statically on it, and this derives the row NamedTuple
+    from the very same annotations.
+    """
+    return NamedTuple(typename, get_type_hints(fields_cls).items())
 
 
 #====================================================
@@ -78,19 +115,24 @@ class NPContainerCreator(TColContainerCreator[np.ndarray]):
 #               TABLE BASE HIERARCHY
 #====================================================
 
-class Table[TRow, TCreator: TColContainerCreator]:
+class Table[TRow]:
     adapter: Dict[str, TColContainerAdapter]
+    # Concrete families bind their column creator here, so the table type
+    # only carries the row type: Table[DRow].
+    col_creator_cls: type[TColContainerCreator]
 
     def __init__(self,
                  name: str,
                  data: npt.ArrayLike,
                  row_type: Type[TRow],
-                 col_a_cre: TCreator):
+                 col_a_cre: type[TColContainerCreator] | TColContainerCreator | None = None):
         self.name = name
         self.row_type = row_type
         self.fields = get_defs_from_rowtype(row_type)
         self.data = np.array(data, dtype=dtype_from_fields(self.fields))
-        self.col_creator = col_a_cre
+        if col_a_cre is None:
+            col_a_cre = type(self).col_creator_cls
+        self.col_creator = col_a_cre() if isinstance(col_a_cre, type) else col_a_cre
         self._cols = self.create_cols_set_attr()
         self._check_col_attrs()
 
@@ -163,9 +205,16 @@ class Table[TRow, TCreator: TColContainerCreator]:
 #====================================================
 
 
-class NpColTable[TRow](Table[TRow, NPContainerCreator]):
+class NpColTable[TRow](Table[TRow]):
+    col_creator_cls = NPContainerCreator
+
     def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
-        super().__init__(name, data, row_type, col_a_cre=NPContainerCreator())
+        super().__init__(name, data, row_type)
+
+    if TYPE_CHECKING:
+        # Column attrs are derived from the row type's shared field
+        # declaration; for type checkers they are plain ndarrays.
+        def __getattr__(self, name: str) -> np.ndarray: ...
 
 #====================================================
 #               DEMO
