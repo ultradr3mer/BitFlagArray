@@ -5,7 +5,7 @@ import pytest
 from clarautils.commonEncoding import (
     get_bitmask, get_bit_count, get_number, get_bits,
     bits_to_hex, hex_to_bits, arrange_bits, get_bitwise_entropy,
-    get_defined_bits, DefinedBit,
+    get_bitwise_mean, get_defined_bits, DefinedBit,
 )
 from clarautils.BitFlagArray import NBitAryOnly, put_bits, Bitty
 
@@ -157,6 +157,46 @@ def test_get_bitwise_entropy_empty():
 def test_get_bitwise_entropy_requires_bit_count():
     with pytest.raises(ValueError):
         get_bitwise_entropy(np.array([1, 2], dtype=np.uint8))
+
+
+def test_get_bitwise_mean_per_item():
+    v = np.array([0b1010, 0b0001, 0b1111], dtype=np.uint8)
+    np.testing.assert_allclose(get_bitwise_mean(v, 4), [0.5, 0.25, 1.0])
+
+
+def test_get_bitwise_mean_per_pos():
+    v = np.array([0b10, 0b11], dtype=np.uint8)
+    np.testing.assert_allclose(get_bitwise_mean(v, 2, axis=0), [1.0, 0.5])
+
+
+def test_get_bitwise_mean_bitty_matches_unpack():
+    rng = np.random.default_rng(7)
+    vals = rng.integers(0, 2 ** 12, size=200, dtype=np.uint64).astype(np.uint16)
+    b = Bitty(vals, max_bit=12)
+    np.testing.assert_allclose(get_bitwise_mean(b), np.mean(b.get_bitwise(), axis=1))
+    np.testing.assert_allclose(get_bitwise_mean(b, axis=0), np.mean(b.get_bitwise(), axis=0))
+
+
+def test_get_bitwise_mean_nbit_ary_only():
+    data = NBitAryOnly(np.array([0b01, 0b11], dtype=np.uint8), 2)
+    np.testing.assert_allclose(get_bitwise_mean(data), [0.5, 1.0])
+
+
+def test_get_bitwise_mean_empty():
+    result = get_bitwise_mean(np.array([], dtype=np.uint8), 5)
+    assert result.shape == (0,)
+    result0 = get_bitwise_mean(np.array([], dtype=np.uint8), 5, axis=0)
+    np.testing.assert_array_equal(result0, np.zeros(5))
+
+
+def test_get_bitwise_mean_requires_bit_count():
+    with pytest.raises(ValueError):
+        get_bitwise_mean(np.array([1, 2], dtype=np.uint8))
+
+
+def test_get_bitwise_mean_invalid_axis():
+    with pytest.raises(ValueError):
+        get_bitwise_mean(np.array([1, 2], dtype=np.uint8), 2, axis=2)
 
 
 def test_get_defined_bits_plain_2arg():

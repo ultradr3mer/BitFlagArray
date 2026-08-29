@@ -216,6 +216,31 @@ def get_bitwise_entropy(a, bit_count=None) -> npt.NDArray[np.float32]:
     return entropy
 
 
+def get_bitwise_mean(a, bit_count=None, axis=1) -> npt.NDArray[np.float64]:
+    """Mean over bits without unpacking; axis=1 per item (popcount/bc), axis=0 per bit position."""
+    from .BitFlagArray import NBitArray
+
+    if isinstance(a, NBitArray):
+        v = a.get_array()
+        bit_count = a.get_bit_count()
+    else:
+        v = np.asarray(a)
+        if bit_count is None:
+            raise ValueError("bit_count is required for plain arrays")
+
+    if v.size == 0:
+        return np.zeros(len(v) if axis == 1 else bit_count, dtype=np.float64)
+
+    if axis not in (0, 1):
+        raise ValueError("axis must be 0 or 1")
+
+    if axis == 1:
+        return np.bitwise_count(v).astype(np.float64) / bit_count
+
+    shifts = np.arange(bit_count - 1, -1, -1, dtype=np.intp)
+    return np.array([np.count_nonzero((v >> s) & 1) for s in shifts], dtype=np.float64) / v.size
+
+
 class DefinedBit(NamedTuple):
     idx: int
     bit: int

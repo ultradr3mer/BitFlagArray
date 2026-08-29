@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from clarautils.BitFlagArray import BitFlagArray, Bitty, DefinedBit
+from clarautils.commonEncoding import get_bitwise_entropy
 from clarautils.commonTyping import get_type_for_bit_count
 
 
@@ -188,6 +189,19 @@ def test_get_bitwise_entropy_method():
     assert entropy.shape == (4,)
     assert entropy.dtype == np.float32
     np.testing.assert_allclose(entropy, np.ones(4), rtol=1e-6)
+
+
+def test_get_bitwise_mean_method():
+    bitty = BitFlagArray(np.array([0b1010, 0b0001, 0b1111], dtype=np.uint8), max_bit=4)
+    np.testing.assert_allclose(bitty.get_bitwise_mean(), [0.5, 0.25, 1.0])
+    np.testing.assert_allclose(bitty.get_bitwise_mean(axis=0), [2 / 3, 1 / 3, 2 / 3, 2 / 3])
+
+
+def test_get_bitwise_entropy_method_on_view():
+    bitty = BitFlagArray(np.array([0b1010, 0b0101], dtype=np.uint8), max_bit=4)
+    part = bitty.b[0:2]
+    np.testing.assert_allclose(part.get_bitwise_entropy(),
+                               get_bitwise_entropy(part), rtol=1e-6)
 
 
 def test_get_defined_bits_all_items_equal():
