@@ -7,7 +7,9 @@ from QueryableTable import (
     QueryableTable,
     ConstraintColAdapter,
     ConstraintColumn,
-    ConstraintSelection,
+    Constraint,
+    Query,
+    Undefined,
 )
 
 
@@ -102,37 +104,38 @@ def test_direct_construction_simple_row():
     assert stbl.name == "simple"
     assert stbl.row_type is SimpleRow
     assert len(stbl) == 3
-    sel = stbl.value >= 20
-    assert list(sel.indices) == [1, 2]
+    q = stbl.value >= 20
+    assert list(q.indices) == [1, 2]
 
 
 # --------------------------------------------------------------------
-# QueryableTable — querying
+# QueryableTable — lazy queries (constraints compose, evaluate on demand)
 # --------------------------------------------------------------------
 
 def test_eq_query(tbl):
-    sel = tbl.signed == False
-    assert isinstance(sel, ConstraintSelection)
-    assert list(sel.indices) == [0, 1, 2, 3]
+    q = tbl.signed == False
+    assert isinstance(q, Constraint)
+    assert list(q.indices) == [0, 1, 2, 3]
 
 
-def test_and_pipeline(tbl):
+def test_and_query(tbl):
     val = 123
-    smallest = (
-        tbl.signed == False
-        and tbl.max >= val
-        and tbl.prev_max < val
-    )
-    assert isinstance(smallest, ConstraintSelection)
+    smallest = (tbl.signed == False) & (tbl.max >= val) & (tbl.prev_max < val)
+    assert isinstance(smallest, Query)
     assert list(smallest.indices) == [0]
 
 
-def test_amp_pipeline(tbl):
-    val = 123
-    smallest = (
-        (((tbl.signed == False) & tbl.max) >= val) & tbl.prev_max
-    ) < val
-    assert list(smallest.indices) == [0]
+def test_or_query(tbl):
+    q = (tbl.bits <= 8) | (tbl.max >= 2 ** 32)
+    assert list(q.indices) == [0, 3, 4, 7]
+
+
+def test_undefined_constraint(tbl):
+    q = tbl.signed == Undefined
+    assert list(q.indices) == [0, 1, 2, 3, 4, 5, 6, 7]
+    # composing with Undefined keeps the other constraint intact
+    combined = (tbl.signed == Undefined) & (tbl.bits >= 32)
+    assert list(combined.indices) == [2, 3, 6, 7]
 
 
 def test_filter_rows_via_iter(tbl):
@@ -142,54 +145,62 @@ def test_filter_rows_via_iter(tbl):
 
 
 def test_ne_query(tbl):
-    sel = tbl.signed != False
-    assert list(sel.indices) == [4, 5, 6, 7]
+    q = tbl.signed != False
+    assert list(q.indices) == [4, 5, 6, 7]
 
 
 def test_lt_query(tbl):
-    sel = tbl.bits < 16
-    assert list(sel.indices) == [0, 4]
+    q = tbl.bits < 16
+    assert list(q.indices) == [0, 4]
 
 
 def test_le_query(tbl):
-    sel = tbl.bits <= 8
-    assert list(sel.indices) == [0, 4]
+    q = tbl.bits <= 8
+    assert list(q.indices) == [0, 4]
 
 
 def test_gt_query(tbl):
-    sel = tbl.bits > 8
-    assert list(sel.indices) == [1, 2, 3, 5, 6, 7]
+    q = tbl.bits > 8
+    assert list(q.indices) == [1, 2, 3, 5, 6, 7]
 
 
 def test_ge_query(tbl):
-    sel = tbl.bits >= 16
-    assert list(sel.indices) == [1, 2, 3, 5, 6, 7]
+    q = tbl.bits >= 16
+    assert list(q.indices) == [1, 2, 3, 5, 6, 7]
 
 
-def test_selection_intersection(tbl):
-    sel1 = tbl.signed == False
-    sel2 = tbl.bits >= 16
-    combined = sel1 & sel2
+def test_query_intersection(tbl):
+    q1 = tbl.signed == False
+    q2 = tbl.bits >= 16
+    combined = q1 & q2
     assert list(combined.indices) == [1, 2, 3]
 
 
 # --------------------------------------------------------------------
-# ConstraintSelection / ConstraintColumn
+# Query execution — get_first / get_all on columns and tables
 # --------------------------------------------------------------------
 
-def test_selection_and_column():
-    sel = ConstraintSelection(np.array([0, 1, 2]))
-    col = ConstraintColumn(np.array([10, 20, 30, 40]))
-    restricted = sel & col
-    assert isinstance(restricted, ConstraintColumn)
-    assert list(restricted.column) == [10, 20, 30]
+def test_column_get_all(tbl):
+    q = tbl.bits >= 32
+    assert [int(v) for v in tbl.max.get_all(q)] == [2 ** 32 - 1, 2 ** 64 - 1, 2 ** 31 - 1, 2 ** 63 - 1]
 
 
-def test_selection_and_selection():
-    s1 = ConstraintSelection(np.array([0, 1, 2, 3]))
-    s2 = ConstraintSelection(np.array([1, 3, 5]))
-    combined = s1 & s2
-    assert list(combined.indices) == [1, 3]
+def test_column_get_first(tbl):
+    assert int(tbl.bits.get_first(tbl.signed == True)) == 8
+
+
+def test_table_get_all_rows(tbl):
+    rows = tbl.get_all(tbl.bits <= 8)
+    assert len(rows) == 2
+    assert all(int(r.bits) == 8 for r in rows)
+    assert all(isinstance(r, TypeLookupRow) for r in rows)
+
+
+def test_table_get_first_row(tbl):
+    row = tbl.get_first(tbl.signed == True)
+    assert isinstance(row, TypeLookupRow)
+    assert bool(row.signed) is True
+    assert int(row.bits) == 8
 
 
 if __name__ == "__main__":
