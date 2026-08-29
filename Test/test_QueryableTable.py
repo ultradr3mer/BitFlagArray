@@ -3,7 +3,7 @@ from typing import NamedTuple
 import numpy as np
 import pytest
 
-from QueryableTable import (
+from clarautils.QueryableTable import (
     QueryableTable,
     ConstraintColumn,
     Constraint,

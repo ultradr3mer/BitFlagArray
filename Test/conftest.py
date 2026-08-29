@@ -5,7 +5,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def clear_bitflag_cache():
     import importlib
-    mod = importlib.import_module("BitFlagArray", package=None)
+    mod = importlib.import_module("clarautils.BitFlagArray", package=None)
     if hasattr(mod, "clear_cache"):
         mod.clear_cache()
     yield

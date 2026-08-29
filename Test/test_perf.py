@@ -3,8 +3,8 @@ import pytest
 
 pytest.importorskip("pytest_benchmark", reason="pip install pytest-benchmark")
 
-import BitFlagArray as _bfa
-from BitFlagArray import (
+import clarautils.BitFlagArray as _bfa
+from clarautils.BitFlagArray import (
     BitFlagArray,
     Bitty,
     NBitAryOnly,
@@ -12,7 +12,7 @@ from BitFlagArray import (
     select_bits,
     clear_cache,
 )
-from commonEncoding import get_bitmask, arrange_bits
+from clarautils.commonEncoding import get_bitmask, arrange_bits
 
 _bfa.MAX_READS = 10_000_000
 

@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from textwrap import wrap
 
-from common import get_type_for_scalar
+from clarautils.commonTyping import get_type_for_scalar
 
 #
 # def get_y_and_heights(text_wrapped, dimensions, margin, font):

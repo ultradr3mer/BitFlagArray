@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from BitFlagArray import BitFlagArray, Bitty
-from commonTyping import get_type_for_bit_count
+from clarautils.BitFlagArray import BitFlagArray, Bitty
+from clarautils.commonTyping import get_type_for_bit_count
 
 
 def test_construct_from_uint_array():

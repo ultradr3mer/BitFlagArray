@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from typing import NamedTuple, get_type_hints
 
-from GenericTable import (
+from clarautils.GenericTable import (
     NpColDef,
     get_defs_from_table_type,
     dtype_from_fields,
@@ -151,7 +151,7 @@ def test_check_col_attrs_fires_on_tampered_attr(tbl):
 # --------------------------------------------------------------------
 
 def test_declared_range_type_is_enforced():
-    from QueryableTable import QueryableTable
+    from clarautils.QueryableTable import QueryableTable
 
     with pytest.raises(TypeError, match="declares range ndarray, got ConstraintColumn"):
         QueryableTable("bad", [(1, 8)], DeclaredRow)

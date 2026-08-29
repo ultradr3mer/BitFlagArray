@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from BitFlagArray import Bitty
+from clarautils.BitFlagArray import Bitty
 from association import build
 from reverseEncoding import IndexedBit, Association
 

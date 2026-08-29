@@ -3,7 +3,7 @@ from typing import get_args, get_type_hints
 import numpy as np
 import pytest
 
-from commonTyping import (
+from clarautils.commonTyping import (
     DTableFields,
     INTEGER_TYPES,
     TypeTable,
@@ -11,7 +11,7 @@ from commonTyping import (
     get_type_for_bit_count,
     get_type_for_scalar,
 )
-from QueryableTable import CCol, Undefined
+from clarautils.QueryableTable import CCol, Undefined
 
 
 # --------------------------------------------------------------------

@@ -7,9 +7,9 @@ import weakref
 import numpy as np
 import numpy.typing as npt
 
-from commonTyping import get_type_for_bit_count
-from commonEncoding import get_bitmask, get_number, get_bits
-from commonEncoding import CommonNBitAry
+from .commonTyping import get_type_for_bit_count
+from .commonEncoding import get_bitmask, get_number, get_bits
+from .commonEncoding import CommonNBitAry
 
 
 # ------------------------------------------------------------------ #

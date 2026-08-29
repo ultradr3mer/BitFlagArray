@@ -2,11 +2,11 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
-from commonEncoding import (
+from clarautils.commonEncoding import (
     get_bitmask, get_bit_count, get_number, get_bits,
     bits_to_hex, hex_to_bits, arrange_bits,
 )
-from BitFlagArray import NBitAryOnly, put_bits
+from clarautils.BitFlagArray import NBitAryOnly, put_bits
 
 
 def test_get_bitmask_no_start():
