@@ -40,6 +40,7 @@ from .commonEncoding import (
     fmt_k_bits,
     arrange_bits,
     get_bitwise_entropy,
+    get_bitwise_mean,
     get_defined_bits,
 )
 from .GenericTable import (
@@ -102,7 +103,7 @@ __all__ = [
     "CommonNBitAry", "CommonNBitSc", "get_max_value", "get_bit_count", "get_bitmask",
     "trim_leading_zero", "get_number", "get_bits", "flip_enc", "trim_trailing_zero",
     "symbol_to_str", "get_bit_flag_idx", "bits_to_hex", "hex_to_bits",
-    "build_bins_n_print", "fmt_k_bits", "arrange_bits", "get_bitwise_entropy", "get_defined_bits",
+    "build_bins_n_print", "fmt_k_bits", "arrange_bits", "get_bitwise_entropy", "get_bitwise_mean", "get_defined_bits",
     "TableFields", "NpColDef", "item_type_of", "range_type_of", "get_defs_from_table_type",
     "dtype_from_fields", "table_item_from_fields", "table_range_from_type", "Table", "NpColTable",
     "Query", "Constraint", "ConstraintColumn", "CCol", "QueryableTable", "QTblSpecialCol",

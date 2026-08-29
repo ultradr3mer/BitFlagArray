@@ -9,7 +9,7 @@ import numpy.typing as npt
 
 from .commonTyping import get_type_for_bit_count
 from .commonEncoding import DefinedBit, get_bitmask, get_number, get_bits
-from .commonEncoding import get_bitwise_entropy, get_defined_bits, CommonNBitAry
+from .commonEncoding import get_bitwise_entropy, get_bitwise_mean, get_defined_bits, CommonNBitAry
 
 
 # ------------------------------------------------------------------ #
@@ -347,6 +347,10 @@ class NBitArray(ABC):
     def get_bitwise_entropy(self) -> npt.NDArray[np.float32]:
         """Per-bit Shannon entropy over all items; forwards to commonEncoding."""
         return get_bitwise_entropy(self)
+
+    def get_bitwise_mean(self, axis=1) -> npt.NDArray[np.float64]:
+        """Mean over bits without unpacking; axis=1 per item, axis=0 per bit position."""
+        return get_bitwise_mean(self, axis=axis)
 
     def get_defined_bits(self) -> List[DefinedBit]:
         """Bits that are constant over all items, as (idx, bit) pairs; MSB-first, without unpacking."""
