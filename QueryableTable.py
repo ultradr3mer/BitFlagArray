@@ -1,5 +1,4 @@
 import operator
-from dataclasses import dataclass
 from typing import Any, Literal, List, Dict, TYPE_CHECKING
 
 import numpy as np
@@ -12,87 +11,98 @@ from common import ExceptionRaiser, get_first_or
 #               QUERY INFRASTRUCTURE
 #====================================================
 
-Undefined = Literal
+Undefined = Literal  # sentinel: `column == Undefined` builds an always-true constraint
 
-_pending_selections: list["ConstraintSelection"] = []
+class Query:
+    """Composed, unevaluated condition over table columns.
+
+    Constraints (``col == v``, ``col >= v``, ...) combine via ``&`` / ``|``
+    into one query. Nothing touches the table data until ``indices``,
+    ``get_first`` or ``get_all`` evaluates it.
+    """
+
+    __slots__ = ("left", "right", "combine")
+
+    def __init__(self, left, right, combine):
+        self.left = left
+        self.right = right
+        self.combine = combine
+
+    def __and__(self, other) -> "Query":
+        return Query(self, other, np.intersect1d)
+
+    def __or__(self, other) -> "Query":
+        return Query(self, other, np.union1d)
+
+    @property
+    def indices(self) -> npt.NDArray[np.intp]:
+        """Evaluate the whole query; row indices that match."""
+        return self.combine(self.left.indices, self.right.indices)
+
+    def evaluate(self) -> npt.NDArray[np.intp]:
+        return self.indices
 
 
-@dataclass(frozen=True)
-class ConstraintSelection:
-    indices: npt.NDArray[np.intp]
+class Constraint(Query):
+    """Single unevaluated condition: one comparison on one column."""
 
-    def __and__(self, other):
-        if isinstance(other, ConstraintSelection):
-            return ConstraintSelection(
-                np.intersect1d(self.indices, other.indices)
-            )
-        if isinstance(other, ConstraintColumn):
-            return other[self]
-        return NotImplemented
+    __slots__ = ("column", "op", "value")
+
+    def __init__(self, column, op, value):
+        self.column = column
+        self.op = op
+        self.value = value
+
+    @property
+    def indices(self) -> npt.NDArray[np.intp]:
+        if self.value is Undefined:  # no constraint -> all rows
+            mask = np.ones(len(self.column.column), dtype=bool)
+        else:
+            mask = self.op(self.column.column, self.value)
+        return np.flatnonzero(mask)
 
 
 class ConstraintColumn:
-    __slots__ = ("table", "column", "parent_indices")
+    """Column of a table; comparisons build lazy Constraints on it."""
 
-    def __init__(
-        self,
-        data: np.ndarray,
-        selector: str | None = None,
-        *,
-        _column: np.ndarray | None = None,
-        _parent_indices: npt.NDArray[np.intp] | None = None,
-    ):
-        if _column is not None:
-            self.column = _column
-            self.table = data
-            self.parent_indices = _parent_indices
-            return
-        self.column = data if selector is None else data[selector]
+    __slots__ = ("table", "name", "column")
+
+    def __init__(self, data: np.ndarray, selector: str | None = None):
         self.table = data
-        self.parent_indices = None
-
-    def _resolve(self, local_indices: npt.NDArray[np.intp]) -> npt.NDArray[np.intp]:
-        return local_indices if self.parent_indices is None else self.parent_indices[local_indices]
+        self.name = selector
+        self.column = data if selector is None else data[selector]
 
     def __getitem__(self, key):
-        if isinstance(key, ConstraintSelection):
-            return ConstraintColumn(
-                self.table,
-                _column=self.column[key.indices],
-                _parent_indices=key.indices,
-            )
         return self.column[key]
 
-    def _compare(self, value: object, op) -> ConstraintSelection:
-        col = self
-        if _pending_selections:
-            col = col[_pending_selections.pop()]
-        if value is Undefined:
-            mask = np.ones(len(col.column), dtype=bool)
-        else:
-            mask = op(col.column, value)
-        return ConstraintSelection(col._resolve(np.flatnonzero(mask)))
+    def __eq__(self, value: object) -> Constraint:  # type: ignore[override]
+        return Constraint(self, operator.eq, value)
 
-    def __eq__(self, value: object) -> ConstraintSelection:  # type: ignore[override]
-        return self._compare(value, operator.eq)
+    def __ne__(self, value: object) -> Constraint:  # type: ignore[override]
+        return Constraint(self, operator.ne, value)
 
-    def __ne__(self, value: object) -> ConstraintSelection:  # type: ignore[override]
-        return self._compare(value, operator.ne)
+    def __lt__(self, value: object) -> Constraint:
+        return Constraint(self, operator.lt, value)
 
-    def __lt__(self, value: object) -> ConstraintSelection:
-        return self._compare(value, operator.lt)
+    def __le__(self, value: object) -> Constraint:
+        return Constraint(self, operator.le, value)
 
-    def __le__(self, value: object) -> ConstraintSelection:
-        return self._compare(value, operator.le)
+    def __gt__(self, value: object) -> Constraint:
+        return Constraint(self, operator.gt, value)
 
-    def __gt__(self, value: object) -> ConstraintSelection:
-        return self._compare(value, operator.gt)
-
-    def __ge__(self, value: object) -> ConstraintSelection:
-        return self._compare(value, operator.ge)
+    def __ge__(self, value: object) -> Constraint:
+        return Constraint(self, operator.ge, value)
 
     def __hash__(self) -> int:
         return id(self)
+
+    def get_all(self, query: Query) -> np.ndarray:
+        """Values of this column for all rows matching the query."""
+        return self.column[query.indices]
+
+    def get_first(self, query: Query) -> Any:
+        """Value of this column for the first row matching the query."""
+        return get_first_or(self.get_all(query), KeyError())
 
 
 CCol = ConstraintColumn
@@ -126,6 +136,14 @@ class QueryableTable[TRow](Table[TRow]):
     def __init__(self, name: str, data: npt.ArrayLike, row_type: type[TRow]):
         super().__init__(name, data, row_type)
 
+    def get_all(self, query: Query) -> List[Any]:
+        """All rows matching the query (full column combination)."""
+        return self[query.indices]
+
+    def get_first(self, query: Query) -> Any:
+        """First row matching the query."""
+        return get_first_or(self.get_all(query), KeyError())
+
     if TYPE_CHECKING:
         # Column attrs are derived from the row type's shared field
         # declaration; for type checkers they are constraint columns.
@@ -145,14 +163,14 @@ class QTblSpecialCol[TRow, SpecialColumnType](QueryableTable[TRow]):
         super().__init__(name, data, row_type)
         self.ref_column = result_dict
 
+    def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
+        if isinstance(key, Query):
+            key = key.indices
+        return self.ref_column[key]
+
     def get_first(self, key) -> SpecialColumnType:
         all_items = self.get_all(key)
         return get_first_or(all_items, KeyError())
-
-    def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
-        if isinstance(key, ConstraintSelection):
-            key = key.indices
-        return self.ref_column[key]
 
 #====================================================
 #               DEMO
@@ -176,23 +194,20 @@ if __name__ == "__main__":
         max: np.uint64
         bits: np.uint8
 
-    qtbl = QueryableTable(name="TypeLookup",data=build_type_table(), row_type=TypeLookupRow)
+    qtbl = QueryableTable(name="TypeLookup", data=build_type_table(), row_type=TypeLookupRow)
     print("direct  ->", qtbl.name, qtbl.dtype, "len:", len(qtbl))
     print("row 0:", qtbl[0])
 
-    sel = qtbl.signed == False
-    print("signed == False ->", sel)
+    q = qtbl.signed == False
+    print("signed == False ->", q.indices)
 
     val = 255
-    smallest = (
-        qtbl.signed == False and qtbl.max >= val
-    )
-    print("smallest unsigned for 123 ->", smallest)
+    smallest = (qtbl.signed == False) & (qtbl.max >= val)
+    print("smallest unsigned for", val, "->", qtbl.get_all(smallest))
 
-    smallest_alt = (
-        (((qtbl.signed == False) & qtbl.max) >= val) & qtbl.prev_max
-    ) < val
-    print("pipeline ->", smallest_alt)
+    # every column can select values; queries compose before they evaluate
+    print("max.get_first   ->", qtbl.max.get_first(qtbl.signed == True))
+    print("rows or-query   ->", qtbl.get_all((qtbl.bits <= 8) | (qtbl.max >= 2**32)))
 
     signed_rows = [t for t in qtbl if t.signed == True]
     print("signed rows:", len(signed_rows))
