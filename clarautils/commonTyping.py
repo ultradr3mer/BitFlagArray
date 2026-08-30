@@ -119,11 +119,12 @@ def get_as_signed(a: np.dtype[Any]) -> np.dtype[Any]: ...
 
 
 @overload
-def get_as_signed(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
+def get_as_signed(a: npt.ArrayLike, fit: bool = False) -> np.ndarray | np.dtype[Any]: ...
 
 
 def get_as_signed(
         a: npt.ArrayLike | np.dtype[Any],
+        fit: bool = False,
 ) -> np.ndarray | np.dtype[Any]:
     if isinstance(a, np.dtype):
         if a.kind == "i":
@@ -135,11 +136,15 @@ def get_as_signed(
 
     a = np.asarray(a)
 
-    if a.dtype.kind == "i":
-        return a
-    if a.dtype.kind != "u":
+    if a.dtype.kind not in ("i", "u"):
         raise TypeError("Expected an integer array")
 
+    if fit:
+        target = _get_type_for_bounds(int(np.min(a)), int(np.max(a)), True)
+        return a if a.dtype == target else a.astype(target)
+
+    if a.dtype.kind == "i":
+        return a
     return a.astype(np.dtype(f"i{a.dtype.itemsize}"))
 
 
@@ -148,7 +153,7 @@ def get_as_unsigned(a: np.dtype[Any]) -> np.dtype[Any]: ...
 
 
 @overload
-def get_as_unsigned(a: npt.ArrayLike) -> np.ndarray | np.dtype[Any]: ...
+def get_as_unsigned(a: npt.ArrayLike, fit: bool = False) -> np.ndarray | np.dtype[Any]: ...
 
 
 def get_as_unsigned(
@@ -165,11 +170,15 @@ def get_as_unsigned(
 
     a = np.asarray(a)
 
-    if a.dtype.kind == "u":
-        return a
-    if a.dtype.kind != "i":
+    if a.dtype.kind not in ("i", "u"):
         raise TypeError("Expected an integer array")
 
+    if fit:
+        target = _get_type_for_bounds(int(np.min(a)), int(np.max(a)), False)
+        return a if a.dtype == target else a.astype(target)
+
+    if a.dtype.kind == "u":
+        return a
     return a.astype(np.dtype(f"u{a.dtype.itemsize}"))
 
 

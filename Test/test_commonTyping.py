@@ -7,6 +7,8 @@ from clarautils.commonTyping import (
     DTableFields,
     INTEGER_TYPES,
     TypeTable,
+    get_as_signed,
+    get_as_unsigned,
     get_type_for_array,
     get_type_for_bit_count,
     get_type_for_scalar,
@@ -168,3 +170,86 @@ def test_get_type_for_scalar_undefined():
 def test_get_type_for_bit_count_undefined():
     assert get_type_for_bit_count(8, Undefined) == np.uint8
     assert get_type_for_bit_count(9, Undefined) == np.uint16
+
+
+# --------------------------------------------------------------------
+# get_as_signed/get_as_unsigned — same-size cast (fit=False)
+# --------------------------------------------------------------------
+
+def test_get_as_signed_unsigned_dtypes():
+    assert get_as_signed(np.dtype("u1")) == np.dtype("i1")
+    assert get_as_signed(np.dtype("u4")) == np.dtype("i4")
+    assert get_as_signed(np.dtype("i2")) == np.dtype("i2")
+    with pytest.raises(TypeError):
+        get_as_signed(np.dtype("f4"))
+
+
+def test_get_as_unsigned_dtypes():
+    assert get_as_unsigned(np.dtype("i1")) == np.dtype("u1")
+    assert get_as_unsigned(np.dtype("i8")) == np.dtype("u8")
+    assert get_as_unsigned(np.dtype("u2")) == np.dtype("u2")
+    with pytest.raises(TypeError):
+        get_as_unsigned(np.dtype("f4"))
+
+
+def test_get_as_signed_arrays():
+    out = get_as_signed(np.array([5, 200], dtype=np.uint16))
+    assert out.dtype == np.dtype("i2")
+    np.testing.assert_array_equal(out, [5, 200])
+    signed = np.array([-5, 5], dtype=np.int32)
+    assert get_as_signed(signed) is signed
+    with pytest.raises(TypeError):
+        get_as_signed(np.array([1.0]))
+
+
+def test_get_as_unsigned_arrays():
+    out = get_as_unsigned(np.array([-5, 5], dtype=np.int16))
+    assert out.dtype == np.dtype("u2")
+    unsigned = np.array([5], dtype=np.uint8)
+    assert get_as_unsigned(unsigned) is unsigned
+    with pytest.raises(TypeError):
+        get_as_unsigned(np.array([1.0]))
+
+
+# --------------------------------------------------------------------
+# get_as_signed/get_as_unsigned — fit=True casts via _get_type_for_bounds
+# --------------------------------------------------------------------
+
+def test_get_as_signed_fit():
+    assert get_as_signed(np.array([0, 100], dtype=np.uint16), fit=True).dtype == np.dtype("i1")
+    assert get_as_signed(np.array([0, 200], dtype=np.uint8), fit=True).dtype == np.dtype("i2")
+    assert get_as_signed(np.array([-128, 100], dtype=np.int32), fit=True).dtype == np.dtype("i1")
+    assert get_as_signed(np.array([-129, 5], dtype=np.int64), fit=True).dtype == np.dtype("i2")
+    np.testing.assert_array_equal(get_as_signed(np.array([0, 200], dtype=np.uint8), fit=True), [0, 200])
+
+
+def test_get_as_signed_fit_scalar():
+    out = get_as_signed(np.uint16(5), fit=True)
+    assert out.dtype == np.dtype("i1")
+    assert out.shape == ()
+    assert get_as_signed(5, fit=True).dtype == np.dtype("i1")
+
+
+def test_get_as_signed_fit_no_copy_when_fitting():
+    a = np.array([1, 2], dtype=np.int8)
+    assert get_as_signed(a, fit=True) is a
+
+
+def test_get_as_unsigned_fit():
+    assert get_as_unsigned(np.array([0, 300], dtype=np.int32), fit=True).dtype == np.dtype("u2")
+    assert get_as_unsigned(np.array([0, 5], dtype=np.int8), fit=True).dtype == np.dtype("u1")
+    assert get_as_unsigned(np.array([0, 5], dtype=np.uint16), fit=True).dtype == np.dtype("u1")
+    np.testing.assert_array_equal(get_as_unsigned(np.array([0, 300], dtype=np.int32), fit=True), [0, 300])
+
+
+def test_get_as_unsigned_fit_scalar():
+    out = get_as_unsigned(np.int32(300), fit=True)
+    assert out.dtype == np.dtype("u2")
+    assert out.shape == ()
+
+
+def test_get_as_unsigned_fit_negative_raises():
+    with pytest.raises(Exception, match="value to big"):
+        get_as_unsigned(np.array([-1, 5], dtype=np.int8), fit=True)
+    with pytest.raises(Exception, match="value to big"):
+        get_as_unsigned(-1, fit=True)
