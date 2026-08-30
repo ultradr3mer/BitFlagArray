@@ -75,13 +75,17 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[in
         return CommonNBitAry(value.astype(get_type_for_array(value)), bit_count)
 
 
-def get_bits(value: np.ndarray | int | str, count=None):
+def get_bits(value: np.ndarray | int | str | CommonNBitSc, count=None):
     if isinstance(value, str):
         return [1 if c == '1' else 0 for c in value]
 
-    bit_count = int(count if count is not None and count > 0
+    bit_count = value.bit_count if isinstance(value, CommonNBitSc) \
+                    else int(count if count is not None and count > 0
                     else get_bit_count(np.max(value)))
     bit_range = np.arange(bit_count - 1, -1, -1)
+
+    if isinstance(value, CommonNBitSc):
+        value = value.value
 
     if np.isscalar(value):
         return (value >> bit_range) & 1

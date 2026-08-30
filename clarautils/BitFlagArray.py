@@ -524,11 +524,17 @@ class SliceView(NBitArray):
     def get_bit_count(self) -> int:
         return get_slice_item_count(self.bit_slice)
 
+    def get_root_data(self) -> NBitArray:
+        data = self.data
+        while isinstance(data, SliceView):
+            data = data.data
+        return data
+
     def get_bit_indices(self):
-        return get_indices(self.bit_slice, self.get_bit_count())
+        return get_indices(self.bit_slice, self.get_root_data().get_bit_count())
 
     def get_item_indices(self):
-        return get_indices(self.item_slice, self.get_item_count())
+        return get_indices(self.item_slice, len(self.get_root_data()))
 
     def get_item_count(self) -> int:
         return get_slice_item_count(self.item_slice)

@@ -132,3 +132,21 @@ def test_group_by_23(bit_data):
     np.testing.assert_array_equal(groups[1], bitty.i[[1,2,5]][[0,1,4,5]])
     np.testing.assert_array_equal(groups[2], bitty.i[[0]][[0,1,4,5]])
     np.testing.assert_array_equal(groups[3], bitty.i[[3, 4]][[0,1,4,5]])
+
+def test_get_item_indices_offset_slice():
+    b = Bitty(np.array([0, 1, 2, 3], dtype=np.uint16), max_bit=2)
+    hi, lo = b.split_i(b.b[0] == 1)
+    odd, even = hi.split_i(hi.b[1] == 1)
+    assert odd.get_item_indices() == [3]
+    assert even.get_item_indices() == [2]
+    assert hi.get_item_indices() == [2, 3]
+    assert lo.get_item_indices() == [0, 1]
+
+
+def test_get_bit_indices_offset_slice():
+    b = Bitty(np.array([0, 1, 2, 3], dtype=np.uint16), max_bit=2)
+    assert b.b[0].get_bit_indices() == [0]
+    assert b.b[1].get_bit_indices() == [1]
+    assert b.b[1:2].get_bit_indices() == [1]
+    assert b.b[0][0].get_bit_indices() == [0]
+    assert b.i[2:4].b[1].get_bit_indices() == [1]
