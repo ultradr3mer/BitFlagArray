@@ -119,13 +119,17 @@ def get_as_signed(a: np.dtype[Any]) -> np.dtype[Any]: ...
 
 
 @overload
-def get_as_signed(a: npt.ArrayLike, fit: bool = False) -> np.ndarray | np.dtype[Any]: ...
+def get_as_signed(a: int | np.integer, fit: bool = False) -> np.integer: ...
+
+
+@overload
+def get_as_signed(a: npt.ArrayLike, fit: bool = False) -> np.ndarray: ...
 
 
 def get_as_signed(
         a: npt.ArrayLike | np.dtype[Any],
         fit: bool = False,
-) -> np.ndarray | np.dtype[Any]:
+) -> np.ndarray | np.integer | np.dtype[Any]:
     if isinstance(a, np.dtype):
         if a.kind == "i":
             return a
@@ -134,6 +138,7 @@ def get_as_signed(
 
         return np.dtype(f"i{a.itemsize}")
 
+    scalar = isinstance(a, (int, np.integer))
     a = np.asarray(a)
 
     if a.dtype.kind not in ("i", "u"):
@@ -141,11 +146,11 @@ def get_as_signed(
 
     if fit:
         target = _get_type_for_bounds(int(np.min(a)), int(np.max(a)), True)
-        return a if a.dtype == target else a.astype(target)
+        a = a if a.dtype == target else a.astype(target)
+    elif a.dtype.kind == "u":
+        a = a.astype(np.dtype(f"i{a.dtype.itemsize}"))
 
-    if a.dtype.kind == "i":
-        return a
-    return a.astype(np.dtype(f"i{a.dtype.itemsize}"))
+    return a[()] if scalar else a
 
 
 @overload
@@ -153,13 +158,17 @@ def get_as_unsigned(a: np.dtype[Any]) -> np.dtype[Any]: ...
 
 
 @overload
-def get_as_unsigned(a: npt.ArrayLike, fit: bool = False) -> np.ndarray | np.dtype[Any]: ...
+def get_as_unsigned(a: int | np.integer, fit: bool = False) -> np.integer: ...
+
+
+@overload
+def get_as_unsigned(a: npt.ArrayLike, fit: bool = False) -> np.ndarray: ...
 
 
 def get_as_unsigned(
         a: npt.ArrayLike | np.dtype[Any],
         fit: bool = False,
-) -> np.ndarray | np.dtype[Any]:
+) -> np.ndarray | np.integer | np.dtype[Any]:
     if isinstance(a, np.dtype):
         if a.kind == "u":
             return a
@@ -168,6 +177,7 @@ def get_as_unsigned(
 
         return np.dtype(f"u{a.itemsize}")
 
+    scalar = isinstance(a, (int, np.integer))
     a = np.asarray(a)
 
     if a.dtype.kind not in ("i", "u"):
@@ -175,11 +185,35 @@ def get_as_unsigned(
 
     if fit:
         target = _get_type_for_bounds(int(np.min(a)), int(np.max(a)), False)
-        return a if a.dtype == target else a.astype(target)
+        a = a if a.dtype == target else a.astype(target)
+    elif a.dtype.kind == "i":
+        a = a.astype(np.dtype(f"u{a.dtype.itemsize}"))
 
-    if a.dtype.kind == "u":
-        return a
-    return a.astype(np.dtype(f"u{a.dtype.itemsize}"))
+    return a[()] if scalar else a
+
+
+@overload
+def get_as_fitting(d: int | np.integer, signed: "bool | Undefined" = False) -> np.integer: ...
+
+
+@overload
+def get_as_fitting(d: npt.ArrayLike, signed: "bool | Undefined" = False) -> np.ndarray: ...
+
+
+def get_as_fitting(
+        d: npt.ArrayLike,
+        signed: "bool | Undefined" = False,
+) -> np.ndarray | np.integer:
+    """Cast to the smallest dtype of the family that fits min/max of d."""
+    scalar = isinstance(d, (int, np.integer))
+    a = np.asarray(d)
+
+    if a.dtype.kind not in ("i", "u"):
+        raise TypeError("Expected an integer array")
+
+    target = _get_type_for_bounds(int(np.min(a)), int(np.max(a)), signed)
+    a = a if a.dtype == target else a.astype(target)
+    return a[()] if scalar else a
 
 
 # ====================================================
@@ -201,6 +235,12 @@ if __name__ == "__main__":
     print("array               ->", get_type_for_array([1, 2, 300]))
     print("array signed        ->", get_type_for_array([-128, 5], signed=True))
     print("array signed nd     ->", get_type_for_array(np.array([-1000, 1000]), signed=True))
+
+    print("fitting u16 ->     ", get_as_fitting(np.array([0, 300], dtype=np.uint16)))
+    print("fitting signed ->  ", get_as_fitting(np.array([-300, 5], dtype=np.int64), signed=True).dtype)
+    print("fitting either ->   ", get_as_fitting(np.array([-128, 100], dtype=np.int32), Undefined).dtype)
+    print("fitting scalar ->   ", get_as_fitting(300, signed=True))
+    print("scalar signed ->    ", get_as_signed(np.uint8(255)), get_as_unsigned(np.int16(-1)))
 
     try:
         get_type_for_bit_count(65)
