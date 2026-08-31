@@ -9,6 +9,7 @@ from clarautils.commonTyping import (
     TypeTable,
     get_as_signed,
     get_as_unsigned,
+    get_as_fitting,
     get_type_for_array,
     get_type_for_bit_count,
     get_type_for_scalar,
@@ -253,3 +254,65 @@ def test_get_as_unsigned_fit_negative_raises():
         get_as_unsigned(np.array([-1, 5], dtype=np.int8), fit=True)
     with pytest.raises(Exception, match="value to big"):
         get_as_unsigned(-1, fit=True)
+
+
+# --------------------------------------------------------------------
+# scalars in, scalars out (int | np.integer)
+# --------------------------------------------------------------------
+
+def test_get_as_signed_scalar():
+    out = get_as_signed(np.uint16(5))
+    assert isinstance(out, np.integer)
+    assert out.dtype == np.dtype("i2")
+    assert out == 5
+    out = get_as_signed(5)
+    assert isinstance(out, np.integer)
+    assert out.dtype == np.dtype("i8")
+    assert get_as_signed(np.int32(-5), fit=True) == np.int8(-5)
+    with pytest.raises(TypeError):
+        get_as_signed(True)
+
+
+def test_get_as_unsigned_scalar():
+    out = get_as_unsigned(np.int16(-1))
+    assert isinstance(out, np.integer)
+    assert out.dtype == np.dtype("u2")
+    out = get_as_unsigned(5)
+    assert isinstance(out, np.integer)
+    assert out.dtype == np.dtype("u8")
+    with pytest.raises(TypeError):
+        get_as_unsigned(True)
+
+
+# --------------------------------------------------------------------
+# get_as_fitting — smallest fitting dtype of the signed family
+# --------------------------------------------------------------------
+
+def test_get_as_fitting():
+    assert get_as_fitting(np.array([0, 300], dtype=np.int32)).dtype == np.dtype("u2")
+    assert get_as_fitting(np.array([-128, 100], dtype=np.int32), signed=True).dtype == np.dtype("i1")
+    assert get_as_fitting(np.array([-129, 5], dtype=np.int64), signed=True).dtype == np.dtype("i2")
+    a = np.array([1, 2], dtype=np.uint8)
+    assert get_as_fitting(a) is a
+    np.testing.assert_array_equal(get_as_fitting(np.array([0, 200], dtype=np.uint8), signed=True), [0, 200])
+
+
+def test_get_as_fitting_undefined():
+    assert get_as_fitting(np.array([-128, 100], dtype=np.int32), Undefined).dtype == np.dtype("i1")
+    assert get_as_fitting(np.array([0, 255], dtype=np.int32), Undefined).dtype == np.dtype("u1")
+
+
+def test_get_as_fitting_scalar():
+    out = get_as_fitting(300, signed=True)
+    assert isinstance(out, np.integer)
+    assert out.dtype == np.dtype("i2")
+    out = get_as_fitting(np.uint16(5))
+    assert isinstance(out, np.integer)
+    assert out.dtype == np.dtype("u1")
+
+
+def test_get_as_fitting_negative_unsigned_raises():
+    with pytest.raises(Exception, match="value to big"):
+        get_as_fitting(np.array([-1, 5], dtype=np.int8))
+    with pytest.raises(TypeError):
+        get_as_fitting(np.array([1.0]))

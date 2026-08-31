@@ -20,6 +20,7 @@ from .commonTyping import (
     get_type_for_array,
     get_as_signed,
     get_as_unsigned,
+    get_as_fitting,
 )
 from .commonEncoding import (
     CommonNBitAry,
@@ -99,7 +100,7 @@ __all__ = [
     "get_first_or", "get_first_or_default", "ExceptionRaiser", "ExcRaiser", "AccessibleAry", "iter_bits",
     "INTEGER_TYPES", "DTableFields", "TypeTable", "build_type_tbl",
     "get_type_for_scalar", "get_type_for_bit_count", "get_type_for_array",
-    "get_as_signed", "get_as_unsigned",
+    "get_as_signed", "get_as_unsigned", "get_as_fitting",
     "CommonNBitAry", "CommonNBitSc", "get_max_value", "get_bit_count", "get_bitmask",
     "trim_leading_zero", "get_number", "get_bits", "flip_enc", "trim_trailing_zero",
     "symbol_to_str", "get_bit_flag_idx", "bits_to_hex", "hex_to_bits",
