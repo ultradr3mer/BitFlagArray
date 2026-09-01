@@ -117,7 +117,7 @@ CCol = ConstraintColumn
 #               QUERYABLE TABLE
 #====================================================
 
-class QueryableTable[TRowNRange](Table[TRowNRange]):
+class QueryableTable(Table):
     """Table whose fields are lazy queryable ConstraintColumns."""
 
     default_range = ConstraintColumn
@@ -147,11 +147,11 @@ class QueryableTable[TRowNRange](Table[TRowNRange]):
 type SpecialColumnType = Any
 TContainer = npt.NDArray[SpecialColumnType]|List[SpecialColumnType]
 
-class QTblSpecialCol[TRowNRange, SpecialColumnType](QueryableTable[TRowNRange]):
+class QTblSpecialCol(QueryableTable):
     result_dict: Dict[str, type]
-    def __init__(self, name: str, data: npt.ArrayLike, result_dict: TContainer,
-                 table_type: type[TRowNRange] | None = None):
-        super().__init__(name, data, table_type)
+    def __init__(self, data: npt.ArrayLike, result_dict: TContainer,
+                 table_type: type | None = None):
+        super().__init__(data, table_type)
         self.ref_column = result_dict
 
     def get_all(self, key) -> npt.NDArray[SpecialColumnType] | SpecialColumnType:
@@ -185,8 +185,8 @@ if __name__ == "__main__":
         max: np.uint64
         bits: np.uint8
 
-    qtbl = QueryableTable(name="TypeLookup", data=build_type_table(), table_type=TypeLookupRow)
-    print("direct  ->", qtbl.name, qtbl.dtype, "len:", len(qtbl))
+    qtbl = QueryableTable(data=build_type_table(), table_type=TypeLookupRow)
+    print("direct  ->", qtbl.dtype, "len:", len(qtbl))
     print("item    ->", qtbl[0])
     print("range   ->", qtbl[4:6])
 

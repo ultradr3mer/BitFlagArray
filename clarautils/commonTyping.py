@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Type, List, Iterable, Any, overload, Literal, TYPE_CHECKING, Tuple
+from typing import TypeVar, Generic, List, Iterable, Any, overload, Literal, TYPE_CHECKING, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -18,10 +18,10 @@ class DTableFields(TableFields):
     bits: CCol | np.uint8
 
 
-class TypeTable(QTblSpecialCol[DTableFields, Type[Any]], DTableFields):
+class TypeTable(QTblSpecialCol, DTableFields):
 
     def __init__(self, data: npt.ArrayLike, result_dict: npt.NDArray[Any]):
-        super().__init__("IntegerTypeTable", data, result_dict)
+        super().__init__(data, result_dict)
 
 
 

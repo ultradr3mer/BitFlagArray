@@ -44,8 +44,8 @@ def lookup_data():
 
 
 @pytest.fixture
-def tbl(lookup_data) -> QueryableTable[TypeLookupRow]:
-    return QueryableTable("TypeLookup", lookup_data, TypeLookupRow)
+def tbl(lookup_data) -> QueryableTable:
+    return QueryableTable(lookup_data, TypeLookupRow)
 
 
 # --------------------------------------------------------------------
@@ -53,7 +53,6 @@ def tbl(lookup_data) -> QueryableTable[TypeLookupRow]:
 # --------------------------------------------------------------------
 
 def test_build(tbl):
-    assert tbl.name == "TypeLookup"
     assert tbl.table_type is TypeLookupRow
     assert tbl.dtype.names == ('signed', 'abs_min', 'max', 'bits', 'prev_max')
     assert tbl.dtype['signed'] == np.dtype(np.bool_)
@@ -99,8 +98,7 @@ def test_adapters_use_base_init(tbl):
 
 
 def test_direct_construction_simple_row():
-    stbl: QueryableTable[SimpleRow] = QueryableTable("simple", [(0, 10), (1, 20), (2, 30)], SimpleRow)
-    assert stbl.name == "simple"
+    stbl: QueryableTable = QueryableTable([(0, 10), (1, 20), (2, 30)], SimpleRow)
     assert stbl.table_type is SimpleRow
     assert len(stbl) == 3
     q = stbl.value >= 20

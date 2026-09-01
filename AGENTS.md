@@ -28,12 +28,12 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 | `README.md` | **veraltet** (PlainTable/TableCreator-Ära) — nicht vertrauen |
 
 ## Kernkonzepte / Terminologie (vom Nutzer festgelegt)
-- "Row type" heißt jetzt **table type**; er zerfällt in **Range** (Spalten-Container, z. B. `CCol`) und **Item** (Skalar, z. B. `np.bool_`). Generischer Parameter: `TRowNRange` ("Row aNd Range").
+- "Row type" heißt jetzt **table type**; er zerfällt in **Range** (Spalten-Container, z. B. `CCol`) und **Item** (Skalar, z. B. `np.bool_`). Die Tabellen sind nicht generisch (kein Typ-Parameter, kein `name`-Argument mehr).
 - Felder werden **genau einmal** deklariert — als `Range | Item`-Union auf einer `TableFields`-Unterklasse. Die Deklaration IST der table type:
   ```python
   class DTableFields(TableFields):
       signed: CCol | np.bool_
-  class TypeTable(QTblSpecialCol[DTableFields, Type[Any]], DTableFields): ...
+  class TypeTable(QTblSpecialCol, DTableFields): ...
   ```
   Das Framework generiert intern `item_type` (skalar-getyptes NamedTuple, gecacht pro Deklaration) und `range_type` (z. B. `DTableRange`). Es gibt KEIN `table_type_from_fields` mehr — nichts per Hand ableiten.
 - `tbl[int]` → Item-Variante (Zeile); `tbl[slice]`/`tbl[indices]` → Range-Variante (Spalten über die Selektion).

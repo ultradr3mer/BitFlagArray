@@ -47,13 +47,13 @@ def build_ref_rows():
 # A) Object-dtype-Feld — Referenz direkt im strukturierten Array
 # --------------------------------------------------------------------
 
-class ObjColTable(QueryableTable[RefColFields], RefColFields):
+class ObjColTable(QueryableTable, RefColFields):
     """Variante A: np_type ist ein object-Field in self.data."""
 
 
 @pytest.fixture
 def o_tbl() -> ObjColTable:
-    return ObjColTable("TypeLookup", build_ref_rows())
+    return ObjColTable(build_ref_rows())
 
 
 def test_a_dtype_has_object_field(o_tbl):
@@ -109,7 +109,7 @@ def test_a_iter(o_tbl):
 
 def test_a_reference_identity():
     sentinel = object()
-    tbl = ObjColTable("t", [(True, 8, sentinel)])
+    tbl = ObjColTable([(True, 8, sentinel)])
     assert tbl.data["np_type"][0] is sentinel
     assert tbl[0].np_type is sentinel
 
@@ -152,11 +152,11 @@ class RefTable:
     ziehen die Referenzen bei Zugriff wieder zu den numpy-Daten.
     """
 
-    def __init__(self, name: str, rows, fields_cls: type,
+    def __init__(self, rows, fields_cls: type,
                  ref_data: dict[str, list]):
         self.hints = get_type_hints(fields_cls)
         self.ref_names = [n for n in self.hints if _is_ref_item(self.hints[n])]
-        self.tbl = QueryableTable(name, rows, numpy_fields_only(fields_cls))
+        self.tbl = QueryableTable(rows, numpy_fields_only(fields_cls))
         self.ref_cols = {n: RefCCol(refs, n) for n, refs in ref_data.items()}
         assert set(self.ref_cols) == set(self.ref_names)
         for n, col in self.ref_cols.items():
@@ -202,7 +202,7 @@ class RefTable:
 def rt() -> RefTable:
     rows = [(issubclass(t, np.signedinteger), np.iinfo(t).bits)
             for t in UINTS + INTS]
-    return RefTable("TypeLookup", rows, RefColFields,
+    return RefTable(rows, RefColFields,
                     ref_data={"np_type": UINTS + INTS})
 
 
@@ -246,7 +246,7 @@ def test_b_iter(rt):
 
 def test_b_reference_identity():
     sentinel = object()
-    rt2 = RefTable("t", [(True, 8)], RefColFields, ref_data={"np_type": [sentinel]})
+    rt2 = RefTable([(True, 8)], RefColFields, ref_data={"np_type": [sentinel]})
     assert rt2.ref_cols["np_type"].column[0] is sentinel
     assert rt2[0].np_type is sentinel
 
