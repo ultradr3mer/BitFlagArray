@@ -100,13 +100,11 @@ def test_table_range_basename():
 
 @pytest.fixture
 def tbl():
-    return Table(name="test",
-                 data=[(1, 0, 255, 8), (2, 1, 65535, 16)],
+    return Table(data=[(1, 0, 255, 8), (2, 1, 65535, 16)],
                  table_type=RowType)
 
 
 def test_table_build(tbl):
-    assert tbl.name == "test"
     assert tbl.table_type is RowType
     assert len(tbl.fields) == 4
     assert len(tbl) == 2
@@ -114,8 +112,7 @@ def test_table_build(tbl):
 
 
 def test_table_empty_data():
-    tbl = Table(name="empty",
-                data=[],
+    tbl = Table(data=[],
                 table_type=RowType)
     assert len(tbl) == 0
     assert list(tbl) == []
@@ -154,12 +151,11 @@ def test_declared_range_type_is_enforced():
     from clarautils.QueryableTable import QueryableTable
 
     with pytest.raises(TypeError, match="declares range ndarray, got ConstraintColumn"):
-        QueryableTable("bad", [(1, 8)], DeclaredRow)
+        QueryableTable([(1, 8)], DeclaredRow)
 
 
 def test_np_col_table_builds_declared_ranges():
-    tbl = NpColTable(name="ok",
-                     data=[(1, 8)],
+    tbl = NpColTable(data=[(1, 8)],
                      table_type=DeclaredRow)
     assert isinstance(tbl.kind, np.ndarray)   # declared range member
 
@@ -176,14 +172,14 @@ def test_table_derives_from_inherited_declaration():
     class DeclTable(Table, DeclFields):
         pass
 
-    tbl = DeclTable(name="decl", data=[(1, 8), (2, 16)])
+    tbl = DeclTable(data=[(1, 8), (2, 16)])
     assert tbl.table_type is DeclFields                       # the declaration IS the table type
     assert tbl.item_type.__name__ == "Decl"
     assert tbl.item_type._fields == ("kind", "bits")
     assert get_type_hints(tbl.item_type)["kind"] is np.uint8      # item variant: specific scalars
     assert tbl.range_type.__name__ == "DeclRange"
     assert get_type_hints(tbl.range_type)["kind"] is np.ndarray   # range variant: specific ranges
-    assert tbl.item_type is DeclTable(name="x", data=[(3, 8)]).item_type  # stable, cached per declaration
+    assert tbl.item_type is DeclTable(data=[(3, 8)]).item_type  # stable, cached per declaration
 
     row = tbl[0]
     assert isinstance(row, tbl.item_type)
@@ -198,7 +194,7 @@ def test_table_without_type_or_declaration_raises():
         pass
 
     with pytest.raises(TypeError, match="TableFields"):
-        BareTable("bare", [(1,)])
+        BareTable([(1,)])
 
 
 def test_explicit_table_type_beats_inherited_declaration():
@@ -209,7 +205,7 @@ def test_explicit_table_type_beats_inherited_declaration():
     class DeclTable(Table, DeclFields):
         pass
 
-    tbl = DeclTable(name="legacy", data=[(1, 0, 255, 8)], table_type=RowType)
+    tbl = DeclTable(data=[(1, 0, 255, 8)], table_type=RowType)
     assert tbl.table_type is RowType
     assert tbl.item_type is RowType
 
@@ -255,7 +251,7 @@ def test_table_rows_helper(tbl):
 
 
 def test_table_repr(tbl):
-    assert 'test' in repr(tbl)
+    assert 'Table' in repr(tbl)
     assert 'len=2' in repr(tbl)
 
 

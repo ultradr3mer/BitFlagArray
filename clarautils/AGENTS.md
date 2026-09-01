@@ -19,12 +19,12 @@ Quelle: `F:\source\BitFlagArray`, installiert per `pip install -e F:\source\BitF
 | `Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
 
 ## Kernkonzepte
-- **table type** zerfällt in **Range** (Spalten-Container, z. B. `CCol`) und **Item** (Skalar, z. B. `np.bool_`); Generics-Parameter: `TRowNRange`.
+- **table type** zerfällt in **Range** (Spalten-Container, z. B. `CCol`) und **Item** (Skalar, z. B. `np.bool_`); Tabellen sind nicht generisch (kein Typ-Parameter, kein `name`-Argument).
 - Felder **genau einmal** deklarieren — als `Range | Item`-Union auf einer `TableFields`-Unterklasse; die Deklaration IST der table type:
   ```python
   class DTableFields(TableFields):
       signed: CCol | np.bool_
-  class TypeTable(QTblSpecialCol[DTableFields, Type[Any]], DTableFields): ...
+  class TypeTable(QTblSpecialCol, DTableFields): ...
   ```
   Framework generiert `item_type` (NamedTuple) und `range_type` automatisch — nichts per Hand ableiten.
 - `tbl[int]` → Item (Zeile); `tbl[slice]`/`tbl[indices]` → Range (Spalten über Selektion).

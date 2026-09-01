@@ -110,7 +110,7 @@ def table_range_from_type(table_type: type, default_range: type = np.ndarray,
 #               TABLE BASE HIERARCHY
 #====================================================
 
-class Table[TRowNRange]:
+class Table:
     """Structured table driven by its table type.
 
     The table type is a ``TableFields`` declaration (each field once as
@@ -123,12 +123,10 @@ class Table[TRowNRange]:
     default_range: type = np.ndarray  # column type for fields declaring no range member
 
     def __init__(self,
-                 name: str,
                  data: npt.ArrayLike,
                  table_type: type | None = None):
         if table_type is None:
             table_type = self._find_table_fields()
-        self.name = name
         self.table_type = table_type
         self.fields = get_defs_from_table_type(table_type)
         self.data = np.array(data, dtype=dtype_from_fields(self.fields))
@@ -215,18 +213,15 @@ class Table[TRowNRange]:
         return [self.item_type(*rec) for rec in self.data]
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(name={self.name!r}, len={len(self)})'
+        return f'{type(self).__name__}(len={len(self)})'
 
 
 #====================================================
 #               NUMPY TABLE
 #====================================================
 
-class NpColTable[TRowNRange](Table[TRowNRange]):
+class NpColTable(Table):
     """Plain numpy table: fields are ndarray columns."""
-
-    def __init__(self, name: str, data: npt.ArrayLike, table_type: type[TRowNRange]):
-        super().__init__(name, data, table_type)
 
     if TYPE_CHECKING:
         # Column attrs come from the table type's shared field declaration;
@@ -244,16 +239,14 @@ if __name__ == "__main__":
         max: np.uint64
         bits: np.uint8
 
-    tbl1 = NpColTable(name="test",
-                      data=[(1, 0, 255, 8), (2, 1, 65535, 16)],
+    tbl1 = NpColTable(data=[(1, 0, 255, 8), (2, 1, 65535, 16)],
                       table_type=RowType)
 
-    print("plain ->", tbl1.name, tbl1.dtype, len(tbl1))
+    print("plain ->", tbl1.dtype, len(tbl1))
     print("item  ->", tbl1[0])
     print("range ->", tbl1[0:1])
     print("max   ->", tbl1.max)
 
-    tbl2 = NpColTable(name="second",
-                      data=[(1, 0, 255, 8), (1, 0, 255, 8), (2, 1, 65535, 16)],
+    tbl2 = NpColTable(data=[(1, 0, 255, 8), (1, 0, 255, 8), (2, 1, 65535, 16)],
                       table_type=RowType)
-    print("second ->", tbl2.name, tbl2[0], "rows:", len(tbl2.rows()))
+    print("second ->", tbl2[0], "rows:", len(tbl2.rows()))
