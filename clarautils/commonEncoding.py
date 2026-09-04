@@ -95,7 +95,7 @@ def get_bits(value: np.ndarray | int | str | CommonNBitSc, count=None):
     else:
         raise Exception("invalid Value")
 
-def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None):
+def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None) ->  np.ndarray:
     if isinstance(value, str):
         return [1 if c == '1' else 0 for c in value]
 

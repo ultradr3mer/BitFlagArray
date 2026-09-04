@@ -125,7 +125,7 @@ def test_applicable_rules_strict_superset_antecedent_not_applicable():
 def test_acc_idx_bit_sorts_by_index():
     a = AccIdxBit([ib(2, 1), ib(0, 1), ib(1, 0)])
     assert a[IndexedBit.Fields.index] == [0, 1, 2]
-    assert a[IndexedBit.Fields.value] == [1, 0, 1]
+    assert a[IndexedBit.Fields.get_rank_info] == [1, 0, 1]
 
 
 def test_acc_idx_bit_accepts_frozenset():
