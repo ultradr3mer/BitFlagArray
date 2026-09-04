@@ -3,8 +3,9 @@ from typing import Iterable, Any, List, NamedTuple, Tuple, overload
 
 import numpy as np
 import numpy.typing as npt
+from clarautils import get_as_unsigned
 
-from .commonTyping import get_type_for_array, get_as_signed
+from .commonTyping import get_type_for_array, get_as_signed, get_type_for_bit_count
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,45 @@ def get_bits(value: np.ndarray | int | str | CommonNBitSc, count=None):
         return (get_as_signed(value.reshape((-1, 1))) >> bit_range) & 1
     else:
         raise Exception("invalid Value")
+
+def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None):
+    if isinstance(value, str):
+        return [1 if c == '1' else 0 for c in value]
+
+    bit_count = value.bit_count if isinstance(value, CommonNBitSc) \
+        else int(count if count is not None and count > 0
+                 else get_bit_count(np.max(value)))
+    bit_range = np.arange(bit_count)
+    flags = (1 << bit_range)
+
+    if isinstance(value, CommonNBitSc):
+        value = value.value
+
+    if np.isscalar(value):
+        res = value & flags
+        return get_as_signed(res[np.nonzero(res)], fit=True)
+    elif isinstance(value, np.ndarray):
+        res = value.reshape((-1, 1)) & flags
+        return get_as_signed(res[np.nonzero(res)], fit=True)
+    else:
+        raise Exception("invalid Value")
+
+def normalize_flags(indices: npt.ArrayLike, bits: npt.ArrayLike=None) -> Tuple[int,int,int]:
+    bit_count = np.max(indices)
+    t = get_type_for_bit_count(indices)
+    if (np.diff(i) >= 0).all():  # if indices ascending, they are from left
+        i = - i + bit_count
+
+    flags = get_as_unsigned(1 << i, fit=True)
+    mask = np.bitwise_or.reduce(flags, dtype=t)
+    if bits is not None:
+        value_flags = b.astype(t) * flags
+        value_mask = np.bitwise_or.reduce(b.astype(t) << i, dtype=t)
+        return bit_count, mask, value_mask
+        # return bit_count, ((mask, flags), (value_mask, value_flags))
+    else:
+        return bit_count, mask, 0
+        # return bit_count, ((mask, flags))
 
 
 def flip_enc(value):
