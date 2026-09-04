@@ -117,17 +117,20 @@ def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None):
     else:
         raise Exception("invalid Value")
 
-def normalize_flags(indices: npt.ArrayLike, bits: npt.ArrayLike=None) -> Tuple[int,int,int]:
-    bit_count = np.max(indices)
-    t = get_type_for_bit_count(indices)
-    if (np.diff(i) >= 0).all():  # if indices ascending, they are from left
-        i = - i + bit_count
+def normalize_flags(idx: npt.ArrayLike, bit: npt.ArrayLike=None) -> Tuple[int,int,int]:
+    idx = np.array(idx)
+    bit = np.array(bit)
 
-    flags = get_as_unsigned(1 << i, fit=True)
+    bit_count = np.max(idx)
+    t = get_type_for_bit_count(bit_count)
+    if (np.diff(idx) >= 0).all():  # if indices ascending, they are from left
+        idx = - idx + bit_count
+
+    flags = get_as_unsigned(1 << idx, fit=True)
     mask = np.bitwise_or.reduce(flags, dtype=t)
-    if bits is not None:
-        value_flags = b.astype(t) * flags
-        value_mask = np.bitwise_or.reduce(b.astype(t) << i, dtype=t)
+    if bit is not None:
+        value_flags = bit.astype(t) * flags
+        value_mask = np.bitwise_or.reduce(bit.astype(t) << idx, dtype=t)
         return bit_count, mask, value_mask
         # return bit_count, ((mask, flags), (value_mask, value_flags))
     else:
