@@ -5,11 +5,15 @@ from typing import Dict, List, NamedTuple, Tuple, Literal
 import numpy as np
 import numpy.typing as npt
 
-import BitFlagArray
-
-import commonEncoding
-import commonTyping
-from clarautils import BitInfo
+try:
+    from .BitFlagArray import NBitAryOnly, Bitty, BittyIndex
+    from . import commonEncoding, commonTyping
+    from .BitInfo import BitInfo
+except ImportError:
+    from BitFlagArray import NBitAryOnly, Bitty, BittyIndex
+    import commonEncoding
+    import commonTyping
+    from clarautils import BitInfo
 
 
 def bits_combs_by_rank(bit_mask: int) -> npt.NDArray:
@@ -80,7 +84,7 @@ class RankIndexMin:
 
     def __init__(
         self,
-        index_floors: BitFlagArray.Bitty,
+        index_floors: Bitty,
         mask_rank: int,
         val_rank: int,
     ) -> None:
@@ -108,9 +112,9 @@ class RankIndexMin:
         full_tbl = cls.idx_from_pos(full_tbl)
         bit_used_by_col = BitInfo.from_value(np.max(full_tbl, axis=0), mode=BitInfo.Mode.B_COUNT)
 
-        n_bit_cols = [BitFlagArray.NBitAryOnly(full_tbl[:, i], b) for i, b in enumerate(bit_used_by_col)]
-        bty = BitFlagArray.Bitty.stack_bit_arys(*n_bit_cols)
-        index = BitFlagArray.BittyIndex(bty).index_by(n_bit_cols)
+        n_bit_cols = [NBitAryOnly(full_tbl[:, i], b) for i, b in enumerate(bit_used_by_col)]
+        bty = Bitty.stack_bit_arys(*n_bit_cols)
+        index = BittyIndex(bty).index_by(n_bit_cols[0]).then_by(n_bit_cols[1:-1]).with_leafs(n_bit_cols[-1])
 
         instance = RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
         return instance

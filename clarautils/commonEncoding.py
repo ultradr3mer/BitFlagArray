@@ -5,7 +5,10 @@ import numpy as np
 import numpy.typing as npt
 from clarautils import get_as_unsigned
 
-from commonTyping import get_type_for_array, get_type_for_bit_count
+try:
+    from .commonTyping import get_type_for_array, get_type_for_bit_count
+except ImportError:
+    from commonTyping import get_type_for_array, get_type_for_bit_count
 
 
 @dataclass(frozen=True)
@@ -78,13 +81,19 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[in
 
 def get_bits(value: np.ndarray | int | str | CommonNBitSc, count=None,
              acc_floats: bool = False):
-    from BitInfo import BitInfo
+    try:
+        from .BitInfo import BitInfo
+    except ImportError:
+        from BitInfo import BitInfo
     return BitInfo.from_value(value, count, BitInfo.Mode.BITS, acc_floats)
 
 
 def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None,
                   acc_floats: bool = False) -> np.ndarray:
-    from BitInfo import BitInfo
+    try:
+        from .BitInfo import BitInfo
+    except ImportError:
+        from BitInfo import BitInfo
     return BitInfo.from_value(value, count, BitInfo.Mode.FLAGS, acc_floats)
 
 def normalize_flags(idx: npt.ArrayLike, bit: npt.ArrayLike=None) -> Tuple[int,int,int]:

@@ -8,10 +8,10 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 - Docstrings/Kommentare minimal halten — lange Docstrings löscht der Nutzer.
 
 ## Packaging
-- Die 7 Kern-Module liegen im Paket **`clarautils/`** (imports: `from clarautils import Bitty`, `from clarautils.commonTyping import ...`). Interne Imports im Paket sind **relativ** (`from .common import ...`).
+- Die 7 Kern-Module liegen im Paket **`clarautils/`** (imports: `from clarautils import Bitty`, `from clarautils.commonTyping import ...`). Interne Imports im Paket sind **relativ mit absolutem Fallback** (`try: from .common import ...` / `except ImportError:`) — so laufen Paket-Import (pytest/`python -m`) UND IDE-Direktaufruf.
 - Installierbar per `pyproject.toml` (setuptools, `numpy` als einzige Abhängigkeit): `pip install -e .` im Ziel-venv — Änderungen hier wirken sofort.
 - `clarautils/__init__.py` re-exportiert die Kern-API — neue öffentliche Namen dort UND in `__all__` ergänzen.
-- Repo-Rest (showcase, DebugPrint, association, reverseEncoding, GainCoder, Tests) importiert `clarautils.<Modul>` absolut.
+- Repo-Rest (showcase, printing/DebugPrint, GainCoder, Tests) importiert `clarautils.<Modul>` absolut. Achtung: `association.py`/`reverseEncoding.py` sind gelöscht (Commit 3beb11e).
 
 ## Modul-Landkarte
 | Modul | Inhalt |
@@ -22,11 +22,10 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 | `clarautils/QueryableTable.py` | lazy `Query`/`Constraint`, `ConstraintColumn`=`CCol`, `QueryableTable`, `QTblSpecialCol`, `Undefined` |
 | `clarautils/commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits` |
 | `clarautils/BitInfo.py` | `BitInfo` — `from_value`/`from_string` mit Modi `bits`/`flags`/`indices`/`count` (B_COUNT läuft in der FLAGS-Pipeline: Bitlänge je Eintrag, durch `bit_count` maskiert; Array-Input normalisiert via `get_as_unsigned(value, fit=True)`, `acc_floats` wird dorthin durchgereicht); `get_bits`/`get_bit_flags` delegieren hierher |
-| `clarautils/BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, LRU-Cache |
+| `clarautils/BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, LRU-Cache, **`BitFlagIndex`/`BittyIndex`** (Index-Baum über `group_by_bit`, konfiguriert per `FluentBuilder`: `index_by(root).then_by(...).with_leafs(...).index_by_key/slice/fullindex().build()`; NBitAryOnly-Schlüssel = die ersten `bit_count` Bits des aktuellen Views; Blätter materialisiert mit `key_path` + absoluten `item_indices`; `dispose_bitty=True` verwirft die Bitty nach `build` + invalidiert den Cache) |
 | `clarautils/Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
-| `clarautils/RankedBit.py` | `RankedBit` (rank-first: erst 1-Bit-Werte, dann 2, ...; lex-Ordnung innerhalb Rang wie `itertools.combinations`), `BitGroupWalker` (Odometer über mehrere RankedBit-Masken, Combined = OR) |
+| `clarautils/RankedBit.py` | `RankedBit` (rank-first: erst 1-Bit-Werte, dann 2, ...; lex-Ordnung innerhalb Rang wie `itertools.combinations`), `BitGroupWalker` (Odometer über mehrere RankedBit-Masken, Combined = OR), `RankIndexMin` (Nachfolger des Anker-Modells, auf `BittyIndex`-Basis, **WIP**) — `get_next`/`_from_global_index`/`get_info` sind aktuell Stubs und die Anker-Funktionen (`_get_rank_index` etc.) auskommentiert |
 | `Multislice.md` | Benchmarks + Faustregeln zur Bit-Selektion |
-| `GenericTableOld.py` | deprecated, Importblock auskommentiert — unberührt lassen |
 | `README.md` | **veraltet** (PlainTable/TableCreator-Ära) — nicht vertrauen |
 
 ## Kernkonzepte / Terminologie (vom Nutzer festgelegt)
@@ -63,9 +62,9 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 ## Tests & Aufruf
 - Windows/pwsh, Python 3.14 in `.venv`:
   `& .\.venv\Scripts\python.exe -m pytest Test -q`
-- **Bewusst defekt** (damalige Scope-Entscheidung, bei Bedarf mit dem Nutzer abklären): `Test/test_common.py`, `Test/test_DebugPrint.py` — stale `from common import get_type_for_*`.
-- `Test/test_perf*.py` sind Benchmarks (~50 s); `Test/conftest.py` hat eine autouse-Fixture, die BitFlagArray importiert.
-- Referenz ohne die beiden defekten + Perf: 209 passed.
+- **Bewusst defekt** (bei Bedarf mit dem Nutzer abklären): `Test/test_common.py`, `Test/test_DebugPrint.py` (stale `from common import get_type_for_*`); `Test/test_association.py`, `Test/test_reverseEncoding.py` (Module in 3beb11e gelöscht); `Test/test_RankedBit.py` (importiert die auskommentierten Anker-Funktionen); `Test/test_BitFlagArray.py::test_stack_items*` (`stack_items` ist auskommentiert).
+- `Test/test_perf*.py` sind Benchmarks (~50 s); `Test/conftest.py` hat eine autouse-Fixture, die BitFlagArray importiert und den Cache räumt.
+- Referenz ohne die defekten + Perf: **275 passed** (Stand BitFlagIndex-Einführung; die 2 `stack_items`-Failures sind in der Defekt-Liste).
 - Schnellster Smoke-Test: die `__main__`-Demos der Module laufen lassen: `& .\.venv\Scripts\python.exe -m clarautils.GenericTable` (analog `clarautils.QueryableTable`, `clarautils.commonTyping`, `clarautils.Mulitslice`).
 
 ## Workflow
