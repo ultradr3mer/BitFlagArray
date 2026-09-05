@@ -80,6 +80,8 @@ def test_floats_rejected_by_default():
     # auch ganzzahlige Floats (uint64 - int64 -> float64) werden abgelehnt
     with pytest.raises(TypeError):
         BitInfo.from_value(np.array([2.0, 2.0, 2.0]), mode="count")
+    with pytest.raises(Exception, match="Float not allowed"):
+        BitInfo.from_value(2.0, mode="count")
 
 
 def test_acc_floats():
