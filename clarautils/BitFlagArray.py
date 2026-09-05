@@ -680,12 +680,68 @@ class IndexKey(NamedTuple):
     index_slice: slice
     key_value: int
 
+class BaseNode(NamedTuple):
+    pass
+
+class BuildingNode(BaseNode): # wird währen des konstruierens verwendet
+    SliceView: SliceView
+
+class IndexingNode(NamedTuple):
+    key_index: Dict[int, BaseNode]
+    slice_index: Dict[slice, BaseNode]
+    int_index: Dict[int, BaseNode]
+#
+# class IndexingStructure(NamedTuple):
+#     root_selector: slice | int | List[int]
+#     intermdiate_selector: List[slice | int | List[int]]
+#     leaf_selector: slice | int | List[int]
+#
+class FluentBuilder:
+    _intex_by_options_flags = {'key':1,'slice':2,'index':4}
+    def __init__(self, build_target: BitFlagArray, root_selector):
+        self.build_target = build_target
+        self.root_selector = root_selector
+        self.intermediate_selector = []
+        self.leaf_selector = None
+        self.intex_by_options: int = 0
+
+    def then_by(self, key):
+        self.intermediate_selector.append(key)
+        pass
+
+    def with_leafs(self, key):
+        self.leaf_selector = key
+        pass
+
+    def index_by_key(self, do=True):
+        self.intex_by_options = self.intex_by_options | _intex_by_options_flags['key']
+        return self
+
+    def index_by_slice(self, do=True):
+        self.intex_by_options = self.intex_by_options | _intex_by_options_flags['slice']
+        return self
+
+    def index_by_index(self, do=True):
+        self.intex_by_options = self.intex_by_options | _intex_by_options_flags['index']
+        return self
+
+    def build(self):
+        return self.build_target
+
 class BitFlagIndex:
-    def __init__(self, index_slice: slice, key_value: int):
-        self.index = {}
+    def __init__(self, bty: Bitty, dispose_bitty=True):
+        self.bty = bty
+        self.root_node: IndexingNode = None
+        self.stucture_root_key = None
+        self.stucture_sub_keys = []
+        self.stucture_leafs = None
 
     @staticmethod
-    def build_index(data: SliceView, bit_used_by_cols: np.ndarray) -> None:
+    def build_index(data: SliceView, selector, ) -> None:
+        key_index: Dict[int, BaseNode]
+        slice_index: Dict[slice, BaseNode]
+        int_index: Dict[int, BaseNode]
+
         next_bit = slice(0, bit_used_by_cols[0])
         index = {}
         for key, group in data.group_by_bit(next_bit).items():
@@ -695,5 +751,12 @@ class BitFlagIndex:
                 raise Exception("More than one slice is not supported")
             index[IndexKey(s, key)] = "Dummy"
         pass
+
+    def index_by(self, key):
+        return FluentBuilder()
+        pass
+
+
+
 
 BittyIndex = BitFlagIndex
