@@ -704,11 +704,6 @@ _BY_SLICE = 2
 _BY_INDEX = 4
 
 
-class IndexKey(NamedTuple):
-    index_slice: slice
-    key_value: int
-
-
 class BaseNode:
     """Gemeinsame Basis der Index-Baum-Knoten."""
 
@@ -727,31 +722,14 @@ class IndexingNode(BaseNode):
 
 @dataclass(frozen=True)
 class LeafNode(BaseNode):
-    data: BitFlagArray
+    data: np.ndarray
     key_path: Tuple[int, ...]
     item_indices: List[int]
 
 
-def _key_levels(key) -> List:
-    # NBitAryOnly-liste -> ein level pro spalte, sonst ein level mit dem key
-    if isinstance(key, (list, tuple)):
-        if not key:
-            return []
-        if all(isinstance(k, NBitAryOnly) for k in key):
-            return list(key)
-    return [key]
-
-
-def _key_to_selector(key):
-    # NBitAryOnly-spalte -> die ersten bit_count bits des aktuellen views
-    if isinstance(key, NBitAryOnly):
-        return slice(0, key.get_bit_count())
-    return key
-
-
 def _finalize_leaf(node: BuildingNode, key_path: Tuple[int, ...]) -> LeafNode:
     return LeafNode(
-        data=node.view.materialize(),
+        data=node.view.get_array(),
         key_path=key_path,
         item_indices=[int(i) for i in node.view.get_item_indices()],
     )
@@ -766,8 +744,8 @@ class FluentBuilder:
         self.index_by_options: int = 0
         self._options_explicit = False
 
-    def then_by(self, key) -> "FluentBuilder":
-        self.intermediate_selector.extend(_key_levels(key))
+    def then_by(self, *keys) -> "FluentBuilder":
+        self.intermediate_selector.extend(keys)
         return self
 
     def with_leafs(self, key) -> "FluentBuilder":
@@ -814,13 +792,7 @@ class BitFlagIndex:
         self.structure_leafs = None
 
     def index_by(self, key) -> FluentBuilder:
-        levels = _key_levels(key)
-        if not levels:
-            raise ValueError("empty index key")
-        builder = FluentBuilder(self, levels[0])
-        if len(levels) > 1:
-            builder.then_by(levels[1:])
-        return builder
+        return FluentBuilder(self, key)
 
     def _build_structure(self, root_key, sub_keys, leaf_key, index_by_options: int):
         if self.root_node is not None:
@@ -838,7 +810,7 @@ class BitFlagIndex:
     @staticmethod
     def build_index(data: NBitArray, level_keys: List, index_by_options: int,
                    key_path: Tuple[int, ...] = ()) -> BaseNode:
-        key_selector = _key_to_selector(level_keys[0])
+        key_selector = level_keys[0]
         key_index: Dict[int, BaseNode] = {}
         slice_index: Dict[slice, BaseNode] = {}
         int_index: Dict[int, BaseNode] = {}
