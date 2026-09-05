@@ -158,17 +158,20 @@ def get_as_unsigned(a: np.dtype[Any]) -> np.dtype[Any]: ...
 
 
 @overload
-def get_as_unsigned(a: int | np.integer, fit: bool = False) -> np.integer: ...
+def get_as_unsigned(a: int | np.integer, fit: bool = False,
+                    acc_floats: bool = False) -> np.unsignedinteger: ...
 
 
 @overload
-def get_as_unsigned(a: npt.ArrayLike, fit: bool = False) -> np.ndarray: ...
+def get_as_unsigned(a: npt.ArrayLike, fit: bool = False,
+                    acc_floats: bool = False) -> np.ndarray: ...
 
 
 def get_as_unsigned(
         a: npt.ArrayLike | np.dtype[Any],
         fit: bool = False,
-) -> np.ndarray | np.integer | np.dtype[Any]:
+        acc_floats: bool = False,
+) -> np.ndarray | np.unsignedinteger | np.dtype[Any]:
     if isinstance(a, np.dtype):
         if a.kind == "u":
             return a
@@ -177,10 +180,14 @@ def get_as_unsigned(
 
         return np.dtype(f"u{a.itemsize}")
 
-    scalar = isinstance(a, (int, np.integer))
+    scalar = isinstance(a, (int, np.integer, float, np.floating))
     a = np.asarray(a)
 
-    if a.dtype.kind not in ("i", "u"):
+    if a.dtype.kind == "f":
+        if not acc_floats or not (np.mod(a, 1) == 0).all():
+            raise TypeError("Expected an integer array")
+        a = a.astype(np.int64)
+    elif a.dtype.kind not in ("i", "u"):
         raise TypeError("Expected an integer array")
 
     if fit:

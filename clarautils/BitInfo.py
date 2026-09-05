@@ -24,7 +24,8 @@ class BitInfo:
 
     @staticmethod
     def from_value(value: npt.ArrayLike | int | str | CommonNBitSc,
-                   bit_count: int | None = None, mode: resultMode = Mode.BITS):
+                   bit_count: int | None = None, mode: resultMode = Mode.BITS,
+                   allow_integer_floats: bool = False):
         mode = BitInfo.Mode(mode)
 
         if isinstance(value, str):
@@ -32,6 +33,9 @@ class BitInfo:
 
         if isinstance(value, CommonNBitSc):
             bit_count, value = value.bit_count, value.value
+
+        if allow_integer_floats and isinstance(value, (float, np.floating)):
+            value = get_as_unsigned(value, fit=True, acc_floats=True)
 
         bit_count = int(bit_count if bit_count is not None and bit_count > 0
                         else get_bit_count(np.max(value)))
@@ -51,7 +55,7 @@ class BitInfo:
             if mode == BitInfo.Mode.BITS:
                 return (get_as_signed(value) >> bit_range_bits) & 1
         else:
-            value = get_as_unsigned(value, fit=True)
+            value = get_as_unsigned(value, fit=True, acc_floats=allow_integer_floats)
             if mode in BitInfo.FLAGS_SUBTYPES:
                 res = value.reshape((-1, 1)) & flags_range
                 if mode == BitInfo.Mode.B_COUNT:
