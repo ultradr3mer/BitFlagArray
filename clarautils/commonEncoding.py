@@ -77,12 +77,12 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[in
 
 
 def get_bits(value: np.ndarray | int | str | CommonNBitSc, count=None):
-    from .BitInfo import BitInfo
+    from BitInfo import BitInfo
     return BitInfo.from_value(value, count, BitInfo.Mode.BITS)
 
 
 def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None) -> np.ndarray:
-    from .BitInfo import BitInfo
+    from BitInfo import BitInfo
     return BitInfo.from_value(value, count, BitInfo.Mode.FLAGS)
 
 def normalize_flags(idx: npt.ArrayLike, bit: npt.ArrayLike=None) -> Tuple[int,int,int]:

@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from clarautils.BitFlagArray import BitFlagArray, Bitty, DefinedBit
-from clarautils.commonEncoding import get_bitwise_entropy
+from clarautils.BitFlagArray import BitFlagArray, Bitty
+from clarautils.commonEncoding import DefinedBit, get_bitwise_entropy
 from clarautils.commonTyping import get_type_for_bit_count
 
 
