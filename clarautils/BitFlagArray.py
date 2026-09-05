@@ -709,11 +709,6 @@ class BaseNode:
 
 
 @dataclass(frozen=True)
-class BuildingNode(BaseNode):  # wird währen des konstruierens verwendet
-    view: SliceView
-
-
-@dataclass(frozen=True)
 class IndexingNode(BaseNode):
     key_index: Dict[int, BaseNode]
     slice_index: Dict[slice, BaseNode]
@@ -727,12 +722,12 @@ class LeafNode(BaseNode):
     item_indices: List[int]
 
 
-def _finalize_leaf(node: BuildingNode, key_path: Tuple[int, ...], leaf_key=None) -> LeafNode:
-    data = node.view.get_array() if leaf_key is None else node.view.b[leaf_key].get_array()
+def _finalize_leaf(view: SliceView, key_path: Tuple[int, ...], leaf_key=None) -> LeafNode:
+    data = view.get_array() if leaf_key is None else view.b[leaf_key].get_array()
     return LeafNode(
         data=data,
         key_path=key_path,
-        item_indices=[int(i) for i in node.view.get_item_indices()],
+        item_indices=[int(i) for i in view.get_item_indices()],
     )
 
 
@@ -822,7 +817,7 @@ class BitFlagIndex:
             if len(level_keys) > 1:
                 child = BitFlagIndex.build_index(group, level_keys[1:], index_by_options, path, leaf_key)
             else:
-                child = _finalize_leaf(BuildingNode(group), path, leaf_key)
+                child = _finalize_leaf(group, path, leaf_key)
             if index_by_options & _BY_KEY:
                 key_index[key_val] = child
             if index_by_options & (_BY_SLICE | _BY_INDEX):

@@ -111,8 +111,8 @@ class RankIndexMin:
         node = self.inner_index.root_node
         depth = 0
         for v in col_vals:
-            if not isinstance(node, IndexingNode):
-                break
+            if not isinstance(node, IndexingNode): ## TODO: Es ist unklar ob diese methoden so kompliziert sein müssen
+                break # TODO Auf jeden fall gehören die eingetlich in dei Index Klasse neben def get(self, key_path) -> BaseNode:
             node = node.key_index[int(v)]
             depth += 1
         if isinstance(node, IndexingNode):
@@ -129,9 +129,9 @@ class RankIndexMin:
         # zeilen-index -> (v0..v_{k-1})
         node = self.inner_index.root_node
         while isinstance(node, IndexingNode):
-            node = node.int_index[int(row)]
-        col_vals = list(node.key_path)
-        if len(col_vals) < self.val_rank:
+            node = node.int_index[int(row)] # TODO diese Methoden erfordern einen durchgängigen index-
+        col_vals = list(node.key_path) # TODO Wir wollen den Index so schalnk wie möglich halten
+        if len(col_vals) < self.val_rank: # TODO Daher sollte das vermieden werden.
             pos_in_leaf = node.item_indices.index(int(row))
             col_vals.append(int(node.data[pos_in_leaf]))
         return tuple(col_vals)
