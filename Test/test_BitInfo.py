@@ -82,26 +82,26 @@ def test_floats_rejected_by_default():
         BitInfo.from_value(np.array([2.0, 2.0, 2.0]), mode="count")
 
 
-def test_allow_integer_floats():
+def test_acc_floats():
     res = BitInfo.from_value(np.array([2.0, 2.0, 2.0]), mode="count",
-                             allow_integer_floats=True)
+                             acc_floats=True)
     np.testing.assert_array_equal(res, [2, 2, 2])
     with pytest.raises(TypeError):
-        BitInfo.from_value(np.array([2.5]), mode="count", allow_integer_floats=True)
+        BitInfo.from_value(np.array([2.5]), mode="count", acc_floats=True)
 
 
-def test_allow_integer_floats_scalar():
-    assert BitInfo.from_value(2.0, mode="count", allow_integer_floats=True) == 2
+def test_acc_floats_scalar():
+    assert BitInfo.from_value(2.0, mode="count", acc_floats=True) == 2
     np.testing.assert_array_equal(
-        BitInfo.from_value(np.float64(10), mode="flags", allow_integer_floats=True), [2, 8])
+        BitInfo.from_value(np.float64(10), mode="flags", acc_floats=True), [2, 8])
     np.testing.assert_array_equal(
-        BitInfo.from_value(10.0, mode="bits", allow_integer_floats=True), [1, 0, 1, 0])
+        BitInfo.from_value(10.0, mode="bits", acc_floats=True), [1, 0, 1, 0])
     with pytest.raises(TypeError):
-        BitInfo.from_value(2.5, mode="count", allow_integer_floats=True)
+        BitInfo.from_value(2.5, mode="count", acc_floats=True)
 
 
-def test_delegates_allow_integer_floats():
-    res = get_bit_flags(np.array([10.0, 3.0]), allow_integer_floats=True)
+def test_delegates_acc_floats():
+    res = get_bit_flags(np.array([10.0, 3.0]), acc_floats=True)
     np.testing.assert_array_equal(res, [2, 8, 1, 2])
 
 

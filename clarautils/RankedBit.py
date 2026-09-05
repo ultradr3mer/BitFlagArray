@@ -100,6 +100,8 @@ class RankIndexMin:
     @classmethod
     def create(cls, mask_rank: int, val_rank: int) -> 'RankIndexMin':
         # comb_items = gen_labels(mask_rank)
+        total_combinations = comb(mask_rank, val_rank)
+        bty = Bitty.empty((total_combinations, mask_rank))
         instance = RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
 
         full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)], fit=True)
