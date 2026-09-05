@@ -17,7 +17,7 @@ Quelle: `F:\source\BitFlagArray`, installiert per `pip install -e F:\source\BitF
 | `commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits`, Hex/Bit-Konvertierung |
 | `BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, Bit-Selektion (`select_bits*`), LRU-Cache |
 | `Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
-| `RankedBit.py` | `RankedBit` (rank-first Iteration), `BitGroupWalker` (Odometer über Gruppen), `bits_rank_first*`, `get_comb_idx` (Brute-Force-Referenz, nur für Tests) |
+| `RankedBit.py` | `RankedBit` (rank-first Iteration), `BitGroupWalker` (Odometer über Gruppen), `bits_rank_first*` |
 
 ## Kernkonzepte
 - **table type** zerfällt in **Range** (Spalten-Container, z. B. `CCol`) und **Item** (Skalar, z. B. `np.bool_`); Tabellen sind nicht generisch (kein Typ-Parameter, kein `name`-Argument).
@@ -40,5 +40,6 @@ Quelle: `F:\source\BitFlagArray`, installiert per `pip install -e F:\source\BitF
 - `get_type_for_bit_count` nimmt Bit-Anzahlen, `get_type_for_scalar` Werte — nicht vertauschen.
 - Neue öffentliche Namen in `clarautils/__init__.py` UND `__all__` ergänzen.
 - Interne Imports im Paket relativ (`from .common import ...`); Ausnahme `RankedBit.py`: zusätzlicher absoluter Fallback im `try/except ImportError`, damit Direktaufruf `python clarautils/RankedBit.py` aus der IDE läuft.
-- `get_comb_idx` liefert `(lex_index, naechste_kombination | None)` — Brute-Force-Referenz für Tests, nicht für Laufzeit-Iteration nutzen.
+- Brute-Force-Referenz `get_comb_idx` (`(lex_index, naechste_kombination | None)`) liegt in `Test/test_RankedBit.py` — bewusst nicht im Paket.
+- Index ist NICHT linear in den Positionen (LGS geprüft — polynomial mit Grad = Rang). Deshalb Anker-Modell: `_INDEX_CACHE` je Bit-Anzahl n (Positionen, nicht Bits — Masks gleicher Größe teilen den Cache); ein Durchlauf notiert die Umbruch-Anker (Positionen + Index), Lookup = Anker + Rest der letzten Spalte (`_gidx_of_positions`/`_positions_of_gidx`). `get_next` zählt nur die letzte Position hoch und springt bei Umbruch zum nächsten Anker. `_lex_index`/`_lex_unrank`/`_next_positions` sind entfernt.
 - Annotation `signed: "bool | Undefined"` muss ein **String** sein — `bool | Literal` crasht zur Laufzeit.

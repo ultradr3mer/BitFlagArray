@@ -1,6 +1,7 @@
+from bisect import bisect_right
 from itertools import combinations
 from math import comb
-from typing import List, NamedTuple, Tuple
+from typing import Dict, List, NamedTuple, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -31,17 +32,17 @@ def bits_rank_first_from_flags(bit_flags, min_r: int = 0, max_r: "int | None" = 
                            fit=True)
 
 
-def get_comb_idx(comb_items, value_mask, value_rank) -> "Tuple[int, Tuple[int, ...] | None]":
-    # brute-force referenz: (lex-index, naechste kombination), None wenn keine folgt
-    next_return = False
-    return_idx = -1
-    for i, c in enumerate(combinations(comb_items, value_rank)):
-        if next_return:
-            return return_idx, c
-        if sum(c) == value_mask:
-            return_idx = i
-            next_return = True
-    return return_idx, None
+# def get_comb_idx(comb_items, value_mask, value_rank) -> "Tuple[int, Tuple[int, ...] | None]":
+#     # brute-force referenz: (lex-index, naechste kombination), None wenn keine folgt
+#     next_return = False
+#     return_idx = -1
+#     for i, c in enumerate(combinations(comb_items, value_rank)):
+#         if next_return:
+#             return return_idx, c
+#         if sum(c) == value_mask:
+#             return_idx = i
+#             next_return = True
+#     return return_idx, None
 
 
 def rank_states_per_rank(mask_rank: int, rank_slice: "slice | int | npt.ArrayLike") -> np.ndarray:
@@ -53,50 +54,85 @@ def rank_states(mask_rank: int, val_rank: int) -> int:
     # Anzahl Zustaende mit Rang < val_rank (Floor fuer Rang val_rank)
     return sum(comb(mask_rank, i) for i in range(1, val_rank))
 
+###############################
+# Positionen vs BitwiseIndex vs Single Scalar Idx
+#################################
+#
+#      1,2,3     1,2,3    0
+#      1,2,4     1,2,4    1
+#      1,2,5     1,2,5    2
+#      1,2,6     1,2,6    3
+#      1,3,4     1,3,4    4 <<< Index hier
+#      1,3,5     1,3,5    5
+#      1,3,6     1,3,6    6
+#      1,4,5     1,4,5    7 <<< Index
+#      1,4,6     1,4,6    8
+#      1,5,6     1,5,6    9 <<< Index
+#      2,3,4     2,3,4    10 <<< Index
+#      2,3,5     2,3,5    11
+#      2,3,6     2,3,6    12
+#      2,4,5     2,4,5    13 <<< Index
+#      2,4,6     2,4,6    14
+#      2,5,6     2,5,6    15 <<< Index
+#      3,4,5     3,4,5    16 <<< Index
+#      3,4,6     3,4,6    17
+#      3,5,6     3,5,6    18 <<< Index
+#      4,5,6     4,5,6    19
+# TODO
 
-def _lex_index(positions, mask_rank: int) -> int:
-    # Rang innerhalb eines Rangs, Ordnung wie itertools.combinations
-    pos = [int(v) for v in np.asarray(positions)]
-    k = len(pos)
-    if k == 0:
-        return 0
-    idx = comb(mask_rank, k) - comb(mask_rank - pos[0], k)
-    for i in range(1, k):
-        idx += comb(mask_rank - 1 - pos[i - 1], k - i) - comb(mask_rank - pos[i], k - i)
-    return idx
+class _RankIndex(NamedTuple):
+    # pro bit-anzahl: umbruch-anker (positionen + index), floors je rang, total
+    anchor_pos: List[Tuple[int, ...]]
+    anchor_gidx: List[int]
+    anchor_row: Dict[Tuple[int, ...], int]
+    rank_floors: List[int]
+    total: int
 
 
-def _lex_unrank(mask_rank: int, k: int, idx: int) -> np.ndarray:
-    pos = np.empty(k, dtype=np.int64)
-    prev = -1
-    for i in range(k):
-        r = k - i
-        v = prev + 1
-        while True:
-            cnt = comb(mask_rank - 1 - v, r - 1)
-            if idx < cnt:
-                break
-            if cnt == 0:
-                raise ValueError("lex index out of range")
-            idx -= cnt
-            v += 1
-        pos[i] = v
-        prev = v
-    return pos
+_INDEX_CACHE: Dict[int, _RankIndex] = {}
 
 
-def _next_positions(pos: np.ndarray, mask_rank: int) -> "np.ndarray | None":
-    # naechste Kombination in lex-Ordnung, None wenn die letzte erreicht ist
-    k = pos.size
-    i = k - 1
-    while i >= 0 and pos[i] == mask_rank - k + i:
-        i -= 1
-    if i < 0:
-        return None
-    new = pos.copy()
-    new[i] += 1
-    new[i + 1:] = np.arange(int(new[i]) + 1, int(new[i]) + 1 + (k - i - 1))
-    return new
+def _build_rank_index(mask_rank: int) -> _RankIndex:
+    # ein durchlauf: anker = segmentstart, letzte spalte beginnt direkt hinter der vorletzten
+    anchor_pos, anchor_gidx = [], []
+    rank_floors = []
+    g = 0
+    for k in range(1, mask_rank + 1):
+        rank_floors.append(g)
+        for pos in combinations(range(mask_rank), k):
+            prev = pos[-2] if len(pos) > 1 else -1
+            if pos[-1] == prev + 1:
+                anchor_pos.append(pos)
+                anchor_gidx.append(g)
+            g += 1
+    return _RankIndex(anchor_pos, anchor_gidx, {p: i for i, p in enumerate(anchor_pos)}, rank_floors, g)
+
+
+def _get_rank_index(mask_rank: int) -> _RankIndex:
+    # cache je bit-anzahl (n), nicht je maske — gleiche groesse teilt sich die tabelle
+    ri = _INDEX_CACHE.get(mask_rank)
+    if ri is None:
+        ri = _INDEX_CACHE[mask_rank] = _build_rank_index(mask_rank)
+    return ri
+
+
+def _gidx_of_positions(mask_rank: int, pos) -> int:
+    # anker des segments suchen, dann letzte spalte aufzaehlen (rang 1: wertigkeit 1)
+    ri = _get_rank_index(mask_rank)
+    p = tuple(int(v) for v in np.asarray(pos))
+    prev = p[-2] if len(p) > 1 else -1
+    anchor = p[:-1] + (prev + 1,)
+    return ri.anchor_gidx[ri.anchor_row[anchor]] + (p[-1] - prev - 1)
+
+
+def _positions_of_gidx(mask_rank: int, gidx: int) -> Tuple[int, ...]:
+    # umkehrung: anker per bisect, letzte spalte = anker-ende + rest
+    ri = _get_rank_index(mask_rank)
+    if not 0 <= gidx < ri.total:
+        raise IndexError("ranked bit index out of range")
+    row = bisect_right(ri.anchor_gidx, gidx) - 1
+    anchor = ri.anchor_pos[row]
+    return anchor[:-1] + (anchor[-1] + gidx - ri.anchor_gidx[row],)
 
 
 class RankedBit(NamedTuple):
@@ -118,7 +154,11 @@ class RankedBit(NamedTuple):
 
         @property
         def index_in_rank(self) -> int:
-            return _lex_index(self.position, self.mask_rank)
+            pos = np.asarray(self.position)
+            if pos.size == 0:
+                return 0
+            ri = _get_rank_index(self.mask_rank)
+            return _gidx_of_positions(self.mask_rank, pos) - ri.rank_floors[pos.size - 1]
 
         @property
         def pos_str(self) -> str:
@@ -178,33 +218,35 @@ class RankedBit(NamedTuple):
 
     def get_next(self, max_rank_idx: "int | None" = None) -> "RankedBit":
         # max_rank_idx: 0-basierter Rang-Index (r -> r+1 Bits); None laeuft bis zur vollen Maske
+        # letzte spalte hochzaehlen; bei umbruch (oder ab leer) den naechsten anker ueber den index
         mask_rank, mask_flags, val_rank, value_flags = self.expand()
-        max_rank = mask_rank if max_rank_idx is None else min(max_rank_idx + 1, mask_rank)
+        ri = _get_rank_index(mask_rank)
+        max_rank = max(0, mask_rank if max_rank_idx is None else min(max_rank_idx + 1, mask_rank))
         if val_rank > max_rank:
             raise StopIteration
-        if val_rank == 0:
-            if max_rank < 1:
-                raise StopIteration
-            return self._with_value(int(mask_flags[0]))
-        pos = np.where(mask_flags & self.bit_value)[0]
-        nxt = _next_positions(pos, mask_rank)
-        if nxt is not None:
-            return self._with_value(int(np.bitwise_or.reduce(mask_flags[nxt])))
-        if val_rank >= max_rank:
+        if val_rank > 0:
+            pos = np.where(mask_flags & self.bit_value)[0]
+            if int(pos[-1]) < mask_rank - 1:
+                nxt = pos.copy()
+                nxt[-1] += 1
+                return self._with_value(int(np.bitwise_or.reduce(mask_flags[nxt])))
+            gidx = _gidx_of_positions(mask_rank, pos)
+        else:
+            gidx = -1
+        ng = gidx + 1
+        ceiling = ri.rank_floors[max_rank] if max_rank < mask_rank else ri.total
+        if ng >= ceiling:
             raise StopIteration
-        return self._with_value(int(np.bitwise_or.reduce(mask_flags[:val_rank + 1])))
+        return self._with_value(int(np.bitwise_or.reduce(mask_flags[np.array(_positions_of_gidx(mask_rank, ng))])))
 
     def _from_global_index(self, gidx: int) -> "RankedBit":
         mask_rank, mask_flags, val_rank, value_flags = self.expand()
-        if gidx < -1 or gidx >= rank_states(mask_rank, mask_rank + 1):
+        if gidx < -1 or gidx >= _get_rank_index(mask_rank).total:
             raise IndexError("ranked bit index out of range")
         if gidx == -1:
             return self._with_value(0)
-        k = 1
-        while gidx >= comb(mask_rank, k):
-            gidx -= comb(mask_rank, k)
-            k += 1
-        return self._with_value(int(np.bitwise_or.reduce(mask_flags[_lex_unrank(mask_rank, k, gidx)])))
+        pos = _positions_of_gidx(mask_rank, gidx)
+        return self._with_value(int(np.bitwise_or.reduce(mask_flags[np.array(pos)])))
 
     def __add__(self, steps: int) -> "RankedBit":
         if not isinstance(steps, int):
@@ -239,7 +281,7 @@ class RankedBit(NamedTuple):
         return cls(bit_mask=(1 << bit_count) - 1, bit_value=0, bit_count=bit_count)
 
     @classmethod
-    def from_value(cls, val: "int | npt.ArrayLike", mask: "int | npt.ArrayLike | None" = None) -> "RankedBit":
+    def from_flags_masks(cls, val: "int | npt.ArrayLike", mask: "int | npt.ArrayLike | None" = None) -> "RankedBit":
         v = cls._build_int(val)
         m = cls._build_int(mask) if mask is not None else (1 << v.bit_length()) - 1
         if v < 0 or m < 0 or v & ~m:
@@ -340,11 +382,16 @@ class BitGroupWalker:
 if __name__ == '__main__':
     demo = RankedBit.from_bits([1, 0, 1], [1, 2, 3])
     print(demo, "->", demo.get_info())
+    demo = RankedBit.from_flags_masks([8,16,64], [4,8,16,32,64,128])
 
     empty = RankedBit.empty(4)
     print("rank-first ab leer:", [b.bit_value for b in empty.iter_next()])
     print("nur bis Rang 2:   ", [b.bit_value for b in empty.iter_next(max_rank_idx=1)])
     print("plus/minus:       ", (empty + 6).bit_value, (empty + 6 - 2).bit_value)
+
+    ri = _get_rank_index(6)
+    anker = [(p, g - ri.rank_floors[2]) for p, g in zip(ri.anchor_pos, ri.anchor_gidx) if len(p) == 3]
+    print("umbruch-anker n=6 rang 3:", anker)
 
     walker = BitGroupWalker(0b0011, 0b1100, max_rank_idx=0)
     print("walker 1 bit/grp: ", [v for v in walker])
