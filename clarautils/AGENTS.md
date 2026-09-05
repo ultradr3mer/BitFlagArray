@@ -15,6 +15,7 @@ Quelle: `F:\source\BitFlagArray`, installiert per `pip install -e F:\source\BitF
 | `GenericTable.py` | Table-Framework: `TableFields`, `Table`, `NpColTable`, item/range-Typen-Ableitung |
 | `QueryableTable.py` | lazy `Query`/`Constraint`, `ConstraintColumn`=`CCol`, `QueryableTable`, `QTblSpecialCol`, `Undefined` |
 | `commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits`, Hex/Bit-Konvertierung |
+| `BitInfo.py` | `BitInfo` — zusammengeführte Bit-Abfrage (`from_value`/`from_string`, Modi `bits`/`flags`/`indices`/`count`); `get_bits`/`get_bit_flags` in commonEncoding delegieren dorthin |
 | `BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, Bit-Selektion (`select_bits*`), LRU-Cache |
 | `Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
 | `RankedBit.py` | `RankedBit` (rank-first Iteration), `BitGroupWalker` (Odometer über Gruppen), `bits_rank_first*` |

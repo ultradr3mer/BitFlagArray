@@ -6,13 +6,12 @@ from typing import Dict, List, NamedTuple, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from clarautils import Bitty
+from clarautils import Bitty, NBitAryOnly
 from clarautils.common import gen_labels
 
 try:
-    from .commonEncoding import get_bit_flags, normalize_flags
-    from .commonTyping import get_as_fitting, get_as_unsigned
-except ImportError:  # direktaufruf: python clarautils/RankedBit.py
+    from clarautils.commonEncoding import get_bit_flags, normalize_flags
+    from clarautils.commonTyping import get_as_fitting, get_as_unsigned
     from clarautils.commonEncoding import get_bit_flags, normalize_flags
     from clarautils.commonTyping import get_as_fitting, get_as_unsigned
 
@@ -110,16 +109,17 @@ class RankIndexMin(NamedTuple):
 
         full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)])
         full_idx = cls.idx_from_pos(full_tbl)
-        np.max(full_idx, axis=0)
-        if
-        bty = Bitty(full_tbl)
-
-
+        bit_used = [int(m).bit_count() for m in np.max(full_idx, axis=0)]
+        n_bit_cols = [NBitAryOnly(c,b) for c, b in zip(full_idx, bit_used)]
+        bty = Bitty.stack_items(*n_bit_cols)
 
     @staticmethod
     def get_or_create(mask_rank: int, val_rank: int) -> RankIndexMin:
         instance = _INSTANCE_CACHE.get((mask_rank, val_rank))
         return instance
+
+    if __name__ == '__main__':
+        demo = RankedBit.from_bits([1, 0, 1], [1, 2, 3])
     # mask / value rank
 #
 # class _RankIndex(NamedTuple):
