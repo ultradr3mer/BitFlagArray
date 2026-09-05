@@ -727,9 +727,10 @@ class LeafNode(BaseNode):
     item_indices: List[int]
 
 
-def _finalize_leaf(node: BuildingNode, key_path: Tuple[int, ...]) -> LeafNode:
+def _finalize_leaf(node: BuildingNode, key_path: Tuple[int, ...], leaf_key=None) -> LeafNode:
+    data = node.view.get_array() if leaf_key is None else node.view.b[leaf_key].get_array()
     return LeafNode(
-        data=node.view.get_array(),
+        data=data,
         key_path=key_path,
         item_indices=[int(i) for i in node.view.get_item_indices()],
     )
@@ -800,16 +801,16 @@ class BitFlagIndex:
         self.structure_root_key = root_key
         self.structure_sub_keys = list(sub_keys)
         self.structure_leafs = leaf_key
+        # with_leafs selektiert die blatt-daten: die tiefste then_by-gruppe wird blatt,
+        # leaf.data = die leaf-key-bits des gruppen-views (kein eigener keyed level)
         level_keys = [root_key] + list(sub_keys)
-        if leaf_key is not None:
-            level_keys.append(leaf_key)
-        self.root_node = self.build_index(self.bty, level_keys, index_by_options)
+        self.root_node = self.build_index(self.bty, level_keys, index_by_options, (), leaf_key)
         if self.dispose_bitty:
             self._dispose_bitty()
 
     @staticmethod
     def build_index(data: NBitArray, level_keys: List, index_by_options: int,
-                   key_path: Tuple[int, ...] = ()) -> BaseNode:
+                   key_path: Tuple[int, ...] = (), leaf_key=None) -> BaseNode:
         key_selector = level_keys[0]
         key_index: Dict[int, BaseNode] = {}
         slice_index: Dict[slice, BaseNode] = {}
@@ -819,9 +820,9 @@ class BitFlagIndex:
             key_val = int(key_val)
             path = key_path + (key_val,)
             if len(level_keys) > 1:
-                child = BitFlagIndex.build_index(group, level_keys[1:], index_by_options, path)
+                child = BitFlagIndex.build_index(group, level_keys[1:], index_by_options, path, leaf_key)
             else:
-                child = _finalize_leaf(BuildingNode(group), path)
+                child = _finalize_leaf(BuildingNode(group), path, leaf_key)
             if index_by_options & _BY_KEY:
                 key_index[key_val] = child
             if index_by_options & (_BY_SLICE | _BY_INDEX):
