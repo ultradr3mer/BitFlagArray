@@ -110,7 +110,7 @@ class RankIndexMin:
 
         n_bit_cols = [BitFlagArray.NBitAryOnly(full_tbl[:, i], b) for i, b in enumerate(bit_used_by_col)]
         bty = BitFlagArray.Bitty.stack_bit_arys(*n_bit_cols)
-        index = BitFlagArray.BittyIndex(bty, bit_used_by_col)
+        index = BitFlagArray.BittyIndex(bty).index_by(n_bit_cols)
 
         instance = RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
         return instance
