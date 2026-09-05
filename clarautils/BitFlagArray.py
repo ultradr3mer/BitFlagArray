@@ -2,14 +2,15 @@ from abc import abstractmethod, abstractproperty, ABC
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import List, Iterable, Tuple, Dict, Union
+from typing import NamedTuple
+
 import weakref
 
 import numpy as np
 import numpy.typing as npt
 
-from clarautils import get_type_for_bit_count
-from clarautils import get_bitmask, get_number, get_bits
-from clarautils import get_bitwise_entropy, get_bitwise_mean, get_defined_bits, CommonNBitAry
+from commonTyping import get_type_for_bit_count
+
 
 # ------------------------------------------------------------------ #
 #  Read-once / cache configuration
@@ -670,3 +671,29 @@ class SliceView(NBitArray):
             bit_slice=self.bit_slice if bit_slice is None else bit_slice,
             item_slice=self.item_slice if item_slice is None else item_slice,
         )
+
+
+# ------------------------------------------------------------------ #
+#  Indexer for espeacialiy Ranked Bit Combinations
+# ------------------------------------------------------------------ #
+class IndexKey(NamedTuple):
+    index_slice: slice
+    key_value: int
+
+class BitFlagIndex:
+    def __init__(self, index_slice: slice, key_value: int):
+        self.index = {}
+
+    @staticmethod
+    def build_index(data: SliceView, bit_used_by_cols: np.ndarray) -> None:
+        next_bit = slice(0, bit_used_by_cols[0])
+        index = {}
+        for key, group in data.group_by_bit(next_bit).items():
+            ms = Multislice(group.i)
+            s = ms.get_slices()
+            if len(s) > s:
+                raise Exception("More than one slice is not supported")
+            index[IndexKey(s, key)] = "Dummy"
+        pass
+
+BittyIndex = BitFlagIndex
