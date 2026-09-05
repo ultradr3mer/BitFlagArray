@@ -6,6 +6,9 @@ from typing import Dict, List, NamedTuple, Tuple
 import numpy as np
 import numpy.typing as npt
 
+from clarautils import Bitty
+from clarautils.common import gen_labels
+
 try:
     from .commonEncoding import get_bit_flags, normalize_flags
     from .commonTyping import get_as_fitting, get_as_unsigned
@@ -84,60 +87,96 @@ def rank_states(mask_rank: int, val_rank: int) -> int:
 # lookup: idx = anker-idx + (letzte pos - vorletzte pos - 1); rang 1: ein anker, wertigkeit 1
 # tabelle im code: _get_rank_index(n) — gepinnt in test_rank_index_anchors_match_table
 
-class _RankIndex(NamedTuple):
-    # pro bit-anzahl: umbruch-anker (positionen + index), floors je rang, total
-    anchor_pos: List[Tuple[int, ...]]
-    anchor_gidx: List[int]
-    anchor_row: Dict[Tuple[int, ...], int]
-    rank_floors: List[int]
-    total: int
+
+_INSTANCE_CACHE: Dict[Tuple[int,int], RankIndexMin] = {}
+class RankIndexMin(NamedTuple):
+    index_floors: Bitty
+    mask_rank: int
+    val_rank: int
+
+    @staticmethod
+    def idx_from_pos(pos: np.ndarray) -> np.ndarray:
+        if not (np.min(pos, axis=0) == np.arange(pos.size)).all():
+            raise ValueError("pos not in range -> r_min save required")
+        return pos - np.arange(pos.size)
+
+    @staticmethod
+    def pos_from_idx(idx: np.ndarray) -> np.ndarray:
+        return idx + np.arange(idx.size)
+
+    @classmethod
+    def create(cls, mask_rank: int, val_rank: int) -> 'RankIndexMin':
+        comb_items = gen_labels(mask_rank)
+
+        full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)])
+        full_idx = cls.idx_from_pos(full_tbl)
+        np.max(full_idx, axis=0)
+        if
+        bty = Bitty(full_tbl)
 
 
-_INDEX_CACHE: Dict[int, _RankIndex] = {}
 
-
-def _build_rank_index(mask_rank: int) -> _RankIndex:
-    # ein durchlauf: anker = segmentstart, letzte spalte beginnt direkt hinter der vorletzten
-    anchor_pos, anchor_gidx = [], []
-    rank_floors = []
-    g = 0
-    for k in range(1, mask_rank + 1):
-        rank_floors.append(g)
-        for pos in combinations(range(mask_rank), k):
-            prev = pos[-2] if len(pos) > 1 else -1
-            if pos[-1] == prev + 1:
-                anchor_pos.append(pos)
-                anchor_gidx.append(g)
-            g += 1
-    return _RankIndex(anchor_pos, anchor_gidx, {p: i for i, p in enumerate(anchor_pos)}, rank_floors, g)
-
-
-def _get_rank_index(mask_rank: int) -> _RankIndex:
-    # cache je bit-anzahl (n), nicht je maske — gleiche groesse teilt sich die tabelle
-    ri = _INDEX_CACHE.get(mask_rank)
-    if ri is None:
-        ri = _INDEX_CACHE[mask_rank] = _build_rank_index(mask_rank)
-    return ri
-
-
-def _gidx_of_positions(mask_rank: int, pos) -> int:
-    # anker des segments suchen, dann letzte spalte aufzaehlen (rang 1: wertigkeit 1)
-    ri = _get_rank_index(mask_rank)
-    p = tuple(int(v) for v in np.asarray(pos))
-    prev = p[-2] if len(p) > 1 else -1
-    anchor = p[:-1] + (prev + 1,)
-    return ri.anchor_gidx[ri.anchor_row[anchor]] + (p[-1] - prev - 1)
-
-
-def _positions_of_gidx(mask_rank: int, gidx: int) -> Tuple[int, ...]:
-    # umkehrung: anker per bisect, letzte spalte = anker-ende + rest
-    ri = _get_rank_index(mask_rank)
-    if not 0 <= gidx < ri.total:
-        raise IndexError("ranked bit index out of range")
-    row = bisect_right(ri.anchor_gidx, gidx) - 1
-    anchor = ri.anchor_pos[row]
-    return anchor[:-1] + (anchor[-1] + gidx - ri.anchor_gidx[row],)
-
+    @staticmethod
+    def get_or_create(mask_rank: int, val_rank: int) -> RankIndexMin:
+        instance = _INSTANCE_CACHE.get((mask_rank, val_rank))
+        return instance
+    # mask / value rank
+#
+# class _RankIndex(NamedTuple):
+#
+#     # pro bit-anzahl: umbruch-anker (positionen + index), floors je rang, total
+#     anchor_pos: List[Tuple[int, ...]]
+#     anchor_gidx: List[int]
+#     anchor_row: Dict[Tuple[int, ...], int]
+#     rank_floors: List[int]
+#     total: int
+#
+#
+# _INDEX_CACHE: Dict[int, _RankIndex] = {}
+#
+#
+# def _build_rank_index(mask_rank: int) -> _RankIndex:
+#     # ein durchlauf: anker = segmentstart, letzte spalte beginnt direkt hinter der vorletzten
+#     anchor_pos, anchor_gidx = [], []
+#     rank_floors = []
+#     g = 0
+#     for k in range(1, mask_rank + 1):
+#         rank_floors.append(g)
+#         for pos in combinations(range(mask_rank), k):
+#             prev = pos[-2] if len(pos) > 1 else -1
+#             if pos[-1] == prev + 1:
+#                 anchor_pos.append(pos)
+#                 anchor_gidx.append(g)
+#             g += 1
+#     return _RankIndex(anchor_pos, anchor_gidx, {p: i for i, p in enumerate(anchor_pos)}, rank_floors, g)
+#
+#
+# def _get_rank_index(mask_rank: int) -> _RankIndex:
+#     # cache je bit-anzahl (n), nicht je maske — gleiche groesse teilt sich die tabelle
+#     ri = _INDEX_CACHE.get(mask_rank)
+#     if ri is None:
+#         ri = _INDEX_CACHE[mask_rank] = _build_rank_index(mask_rank)
+#     return ri
+#
+#
+# def _gidx_of_positions(mask_rank: int, pos) -> int:
+#     # anker des segments suchen, dann letzte spalte aufzaehlen (rang 1: wertigkeit 1)
+#     ri = _get_rank_index(mask_rank)
+#     p = tuple(int(v) for v in np.asarray(pos))
+#     prev = p[-2] if len(p) > 1 else -1
+#     anchor = p[:-1] + (prev + 1,)
+#     return ri.anchor_gidx[ri.anchor_row[anchor]] + (p[-1] - prev - 1)
+#
+#
+# def _positions_of_gidx(mask_rank: int, gidx: int) -> Tuple[int, ...]:
+#     # umkehrung: anker per bisect, letzte spalte = anker-ende + rest
+#     ri = _get_rank_index(mask_rank)
+#     if not 0 <= gidx < ri.total:
+#         raise IndexError("ranked bit index out of range")
+#     row = bisect_right(ri.anchor_gidx, gidx) - 1
+#     anchor = ri.anchor_pos[row]
+#     return anchor[:-1] + (anchor[-1] + gidx - ri.anchor_gidx[row],)
+#
 
 class RankedBit(NamedTuple):
     class RankInfo(NamedTuple):
