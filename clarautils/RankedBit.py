@@ -92,7 +92,6 @@ class RankIndexMin(NamedTuple):
 
         full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)])
         full_idx = cls.idx_from_pos(full_tbl)
-
         bit_used_binf = BitInfo.from_value(np.max(full_idx, axis=0), mode=BitInfo.Mode.B_COUNT)
         bit_used = [int(m).bit_count() for m in np.max(full_idx, axis=0)]
         if not (bit_used_binf == bit_used).all():
@@ -174,53 +173,54 @@ if __name__ == '__main__':
 #     return anchor[:-1] + (anchor[-1] + gidx - ri.anchor_gidx[row],)
 #
 
+class RankInfo(NamedTuple):
+    rank_index: int
+    index_floor: int
+
+    def __repr__(self):
+        return f"RankInfo(rank={self.rank_index}, floor={self.index_floor})"
+
+class RankCombInfo(NamedTuple):
+    position: "np.ndarray | Tuple[int, ...]"
+    mask_rank: int
+
+    @property
+    def bitwise_index(self) -> np.ndarray:
+        pos = np.asarray(self.position)
+        return pos - np.arange(pos.size)
+
+    @property
+    def index_in_rank(self) -> int:
+        pos = np.asarray(self.position)
+        if pos.size == 0:
+            return 0
+        ri = _get_rank_index(self.mask_rank)
+        return _gidx_of_positions(self.mask_rank, pos) - ri.rank_floors[pos.size - 1]
+
+    @property
+    def pos_str(self) -> str:
+        return ", ".join(str(int(v)) for v in np.asarray(self.position))
+
+    def __repr__(self):
+        return f"CombInfo(pos=[{self.pos_str}], idx={self.index_in_rank}, n={self.mask_rank})"
+
+class RankedBitInfo(NamedTuple):
+    rank_info: RankInfo
+    comb_info: RankCombInfo
+
+    @property
+    def global_index(self) -> int:
+        if self.rank_info.rank_index == 0:
+            return -1
+        return self.rank_info.index_floor + self.comb_info.index_in_rank
+
+    def __repr__(self):
+        return (f"Info(rank={self.rank_info.rank_index}, floor={self.rank_info.index_floor}, "
+                f"pos=[{self.comb_info.pos_str}], idx={self.comb_info.index_in_rank}, "
+                f"gidx={self.global_index})")
+
+
 class RankedBit(NamedTuple):
-    class RankInfo(NamedTuple):
-        rank_index: int
-        index_floor: int
-
-        def __repr__(self):
-            return f"RankInfo(rank={self.rank_index}, floor={self.index_floor})"
-
-    class CombInfo(NamedTuple):
-        position: "np.ndarray | Tuple[int, ...]"
-        mask_rank: int
-
-        @property
-        def bitwise_index(self) -> np.ndarray:
-            pos = np.asarray(self.position)
-            return pos - np.arange(pos.size)
-
-        @property
-        def index_in_rank(self) -> int:
-            pos = np.asarray(self.position)
-            if pos.size == 0:
-                return 0
-            ri = _get_rank_index(self.mask_rank)
-            return _gidx_of_positions(self.mask_rank, pos) - ri.rank_floors[pos.size - 1]
-
-        @property
-        def pos_str(self) -> str:
-            return ", ".join(str(int(v)) for v in np.asarray(self.position))
-
-        def __repr__(self):
-            return f"CombInfo(pos=[{self.pos_str}], idx={self.index_in_rank}, n={self.mask_rank})"
-
-    class Info(NamedTuple):
-        rank_info: "RankedBit.RankInfo"
-        comb_info: "RankedBit.CombInfo"
-
-        @property
-        def global_index(self) -> int:
-            if self.rank_info.rank_index == 0:
-                return -1
-            return self.rank_info.index_floor + self.comb_info.index_in_rank
-
-        def __repr__(self):
-            return (f"Info(rank={self.rank_info.rank_index}, floor={self.rank_info.index_floor}, "
-                    f"pos=[{self.comb_info.pos_str}], idx={self.comb_info.index_in_rank}, "
-                    f"gidx={self.global_index})")
-
     bit_mask: int
     bit_value: int
     bit_count: int
@@ -236,17 +236,17 @@ class RankedBit(NamedTuple):
             raise ValueError("val and mask mut not contain same flag twice")
         return mask_rank, mask_flags, rank, value_flags
 
-    def get_comb_info(self) -> "RankedBit.CombInfo":
+    def get_comb_info(self) -> RankCombInfo:
         mask_rank, mask_flags, val_rank, value_flags = self.expand()
         bitwise_pos = np.where(mask_flags & self.bit_value)[0]
-        return RankedBit.CombInfo(bitwise_pos, mask_rank)
+        return RankCombInfo(bitwise_pos, mask_rank)
 
-    def get_rank_info(self) -> "RankedBit.RankInfo":
+    def get_rank_info(self) -> RankInfo:
         mask_rank, mask_flags, val_rank, value_flags = self.expand()
-        return RankedBit.RankInfo(val_rank, rank_states(mask_rank, val_rank))
+        return RankInfo(val_rank, rank_states(mask_rank, val_rank))
 
-    def get_info(self) -> "RankedBit.Info":
-        return RankedBit.Info(self.get_rank_info(), self.get_comb_info())
+    def get_info(self) -> RankedBitInfo:
+        return RankInfo(self.get_rank_info(), self.get_comb_info())
 
     @property
     def global_index(self) -> int:
@@ -256,36 +256,38 @@ class RankedBit(NamedTuple):
         return RankedBit(self.bit_mask, value, self.bit_count)
 
     def get_next(self, max_rank_idx: "int | None" = None) -> "RankedBit":
-        # max_rank_idx: 0-basierter Rang-Index (r -> r+1 Bits); None laeuft bis zur vollen Maske
-        # letzte spalte hochzaehlen; bei umbruch (oder ab leer) den naechsten anker ueber den index
-        mask_rank, mask_flags, val_rank, value_flags = self.expand()
-        ri = _get_rank_index(mask_rank)
-        max_rank = max(0, mask_rank if max_rank_idx is None else min(max_rank_idx + 1, mask_rank))
-        if val_rank > max_rank:
-            raise StopIteration
-        if val_rank > 0:
-            pos = np.where(mask_flags & self.bit_value)[0]
-            if int(pos[-1]) < mask_rank - 1:
-                nxt = pos.copy()
-                nxt[-1] += 1
-                return self._with_value(int(np.bitwise_or.reduce(mask_flags[nxt])))
-            gidx = _gidx_of_positions(mask_rank, pos)
-        else:
-            gidx = -1
-        ng = gidx + 1
-        ceiling = ri.rank_floors[max_rank] if max_rank < mask_rank else ri.total
-        if ng >= ceiling:
-            raise StopIteration
-        return self._with_value(int(np.bitwise_or.reduce(mask_flags[np.array(_positions_of_gidx(mask_rank, ng))])))
+        # # max_rank_idx: 0-basierter Rang-Index (r -> r+1 Bits); None laeuft bis zur vollen Maske
+        # # letzte spalte hochzaehlen; bei umbruch (oder ab leer) den naechsten anker ueber den index
+        # mask_rank, mask_flags, val_rank, value_flags = self.expand()
+        # ri = _get_rank_index(mask_rank)
+        # max_rank = max(0, mask_rank if max_rank_idx is None else min(max_rank_idx + 1, mask_rank))
+        # if val_rank > max_rank:
+        #     raise StopIteration
+        # if val_rank > 0:
+        #     pos = np.where(mask_flags & self.bit_value)[0]
+        #     if int(pos[-1]) < mask_rank - 1:
+        #         nxt = pos.copy()
+        #         nxt[-1] += 1
+        #         return self._with_value(int(np.bitwise_or.reduce(mask_flags[nxt])))
+        #     gidx = _gidx_of_positions(mask_rank, pos)
+        # else:
+        #     gidx = -1
+        # ng = gidx + 1
+        # ceiling = ri.rank_floors[max_rank] if max_rank < mask_rank else ri.total
+        # if ng >= ceiling:
+        #     raise StopIteration
+        # return self._with_value(int(np.bitwise_or.reduce(mask_flags[np.array(_positions_of_gidx(mask_rank, ng))])))
+        pass
 
     def _from_global_index(self, gidx: int) -> "RankedBit":
-        mask_rank, mask_flags, val_rank, value_flags = self.expand()
-        if gidx < -1 or gidx >= _get_rank_index(mask_rank).total:
-            raise IndexError("ranked bit index out of range")
-        if gidx == -1:
-            return self._with_value(0)
-        pos = _positions_of_gidx(mask_rank, gidx)
-        return self._with_value(int(np.bitwise_or.reduce(mask_flags[np.array(pos)])))
+        # mask_rank, mask_flags, val_rank, value_flags = self.expand()
+        # if gidx < -1 or gidx >= _get_rank_index(mask_rank).total:
+        #     raise IndexError("ranked bit index out of range")
+        # if gidx == -1:
+        #     return self._with_value(0)
+        # pos = _positions_of_gidx(mask_rank, gidx)
+        # return self._with_value(int(np.bitwise_or.reduce(mask_flags[np.array(pos)])))
+        pass
 
     def __add__(self, steps: int) -> "RankedBit":
         if not isinstance(steps, int):

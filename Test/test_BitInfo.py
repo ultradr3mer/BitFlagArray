@@ -53,13 +53,33 @@ def test_b_count_scalar():
     assert BitInfo.from_value(0, mode="count") == 0
 
 
-def test_b_count_ignores_explicit_bit_count():
+def test_b_count_within_explicit_bit_count():
     assert BitInfo.from_value(0b101, 8, "count") == 3
+    assert BitInfo.from_value(0b1010, 2, "count") == 2  # auf bit_count maskiert
 
 
-def test_b_count_ndarray_max():
+def test_b_count_ndarray_per_entry():
     res = BitInfo.from_value(np.array([0b101, 0b110], dtype=np.uint8), mode="count")
-    assert res == 3
+    np.testing.assert_array_equal(res, [3, 3])
+
+
+def test_b_count_ndarray_zero_entries():
+    res = BitInfo.from_value(np.array([0, 0b101], dtype=np.uint8), mode="count")
+    np.testing.assert_array_equal(res, [0, 3])
+    res = BitInfo.from_value(np.zeros(3, dtype=np.uint8), mode="count")
+    np.testing.assert_array_equal(res, [0, 0, 0])
+
+
+def test_b_count_ndarray_2d_flat():
+    res = BitInfo.from_value(np.array([[0b101, 0b110], [0b1, 0b1000]], dtype=np.uint32),
+                             mode="count")
+    np.testing.assert_array_equal(res, [3, 3, 1, 4])
+
+
+def test_floats_rejected():
+    # auch ganzzahlige Floats (uint64 - int64 -> float64) werden abgelehnt
+    with pytest.raises(TypeError):
+        BitInfo.from_value(np.array([2.0, 2.0, 2.0]), mode="count")
 
 
 def test_common_n_bit_sc():

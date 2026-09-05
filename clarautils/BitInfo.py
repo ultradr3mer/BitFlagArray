@@ -4,7 +4,7 @@ from typing import Literal, Iterable
 import numpy as np
 import numpy.typing as npt
 
-from clarautils import CommonNBitSc, get_bit_count, get_number
+from clarautils import CommonNBitSc, get_bit_count, get_number, get_as_unsigned
 from clarautils import get_as_signed
 
 
@@ -33,9 +33,6 @@ class BitInfo:
         if isinstance(value, CommonNBitSc):
             bit_count, value = value.bit_count, value.value
 
-        if mode == BitInfo.Mode.B_COUNT:
-            return get_bit_count(value if np.isscalar(value) else np.max(value))
-
         bit_count = int(bit_count if bit_count is not None and bit_count > 0
                         else get_bit_count(np.max(value)))
         bit_range_bits = np.arange(bit_count - 1, -1, -1)
@@ -44,6 +41,9 @@ class BitInfo:
         if np.isscalar(value):
             if mode in BitInfo.FLAGS_SUBTYPES:
                 res = value & flags_range
+                if mode == BitInfo.Mode.B_COUNT:
+                    set_positions = np.nonzero(res)[0]
+                    return int(set_positions[-1]) + 1 if set_positions.size else 0
                 flags = get_as_signed(res[np.nonzero(res)], fit=True)
                 if mode == BitInfo.Mode.FLAGS:
                     return flags
@@ -51,11 +51,15 @@ class BitInfo:
             if mode == BitInfo.Mode.BITS:
                 return (get_as_signed(value) >> bit_range_bits) & 1
         else:
-            value = np.asarray(value)
-            if value.dtype.kind not in ("i", "u"):
-                raise Exception("invalid Value")
+            value = get_as_unsigned(value, fit=True)
             if mode in BitInfo.FLAGS_SUBTYPES:
                 res = value.reshape((-1, 1)) & flags_range
+                if mode == BitInfo.Mode.B_COUNT:
+                    if bit_count == 0:
+                        return np.zeros(res.shape[0], dtype=np.intp)
+                    set_rows = (res > 0).any(axis=1)
+                    rev_first = np.argmax((res > 0)[:, ::-1], axis=1)
+                    return np.where(set_rows, bit_count - rev_first, 0)
                 flags = get_as_signed(res[np.nonzero(res)], fit=True)
                 if mode == BitInfo.Mode.FLAGS:
                     return flags
