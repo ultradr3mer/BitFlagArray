@@ -256,6 +256,19 @@ def test_get_as_unsigned_fit_negative_raises():
         get_as_unsigned(-1, fit=True)
 
 
+def test_get_as_unsigned_allow_integer_floats():
+    out = get_as_unsigned(np.array([2.0, 10.0]), fit=True, acc_floats=True)
+    assert out.dtype == np.dtype("u1")
+    np.testing.assert_array_equal(out, [2, 10])
+    assert get_as_unsigned(2.0, acc_floats=True) == 2
+    with pytest.raises(TypeError):
+        get_as_unsigned(np.array([2.0]))
+    with pytest.raises(TypeError):
+        get_as_unsigned(np.array([2.5]), acc_floats=True)
+    with pytest.raises(TypeError):
+        get_as_unsigned(2.5, acc_floats=True)
+
+
 # --------------------------------------------------------------------
 # scalars in, scalars out (int | np.integer)
 # --------------------------------------------------------------------

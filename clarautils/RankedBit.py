@@ -69,11 +69,22 @@ def rank_states(mask_rank: int, val_rank: int) -> int:
 # tabelle im code: _get_rank_index(n) — gepinnt in test_rank_index_anchors_match_table
 
 
-_INSTANCE_CACHE: Dict[Tuple[int,int], RankIndexMin] = {}
-class RankIndexMin(NamedTuple):
-    index_floors: Bitty
-    mask_rank: int
-    val_rank: int
+# class RankIndexMin(NamedTuple):
+#     index_floors: Bitty
+#     mask_rank: int
+#     val_rank: int
+class RankIndexMin:
+    _INSTANCE_CACHE: Dict[Tuple[int, int], RankIndexMin] = {}
+
+    def __init__(
+        self,
+        # index_floors: Bitty,
+        mask_rank: int,
+        val_rank: int,
+    ) -> None:
+        self.index_floors: Bitty = None
+        self.mask_rank = mask_rank
+        self.val_rank = val_rank
 
     @staticmethod
     def idx_from_pos(pos: np.ndarray) -> np.ndarray:
@@ -89,8 +100,9 @@ class RankIndexMin(NamedTuple):
     @classmethod
     def create(cls, mask_rank: int, val_rank: int) -> 'RankIndexMin':
         # comb_items = gen_labels(mask_rank)
+        instance = RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
 
-        full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)])
+        full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)], fit=True)
         full_idx = cls.idx_from_pos(full_tbl)
         bit_used_binf = BitInfo.from_value(np.max(full_idx, axis=0), mode=BitInfo.Mode.B_COUNT)
         bit_used = [int(m).bit_count() for m in np.max(full_idx, axis=0)]
@@ -100,7 +112,7 @@ class RankIndexMin(NamedTuple):
         n_bit_cols = [NBitAryOnly(c,b) for c, b in zip(full_idx, bit_used)]
         bty = Bitty.stack_items(*n_bit_cols)
 
-        return RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
+        return
 
     @classmethod
     def get_or_create(cls, mask_rank: int, val_rank: int) -> RankIndexMin:
