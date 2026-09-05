@@ -119,16 +119,19 @@ def get_as_signed(a: np.dtype[Any]) -> np.dtype[Any]: ...
 
 
 @overload
-def get_as_signed(a: int | np.integer, fit: bool = False) -> np.integer: ...
+def get_as_signed(a: int | np.integer, fit: bool = False,
+                  acc_floats: bool = False) -> np.integer: ...
 
 
 @overload
-def get_as_signed(a: npt.ArrayLike, fit: bool = False) -> np.ndarray: ...
+def get_as_signed(a: npt.ArrayLike, fit: bool = False,
+                  acc_floats: bool = False) -> np.ndarray: ...
 
 
 def get_as_signed(
         a: npt.ArrayLike | np.dtype[Any],
         fit: bool = False,
+        acc_floats: bool = False,
 ) -> np.ndarray | np.integer | np.dtype[Any]:
     if isinstance(a, np.dtype):
         if a.kind == "i":
@@ -138,10 +141,14 @@ def get_as_signed(
 
         return np.dtype(f"i{a.itemsize}")
 
-    scalar = isinstance(a, (int, np.integer))
+    scalar = isinstance(a, (int, np.integer, float, np.floating))
     a = np.asarray(a)
 
-    if a.dtype.kind not in ("i", "u"):
+    if a.dtype.kind == "f":
+        if not acc_floats or not (np.mod(a, 1) == 0).all():
+            raise TypeError("Expected an integer array")
+        a = a.astype(np.int64)
+    elif a.dtype.kind not in ("i", "u"):
         raise TypeError("Expected an integer array")
 
     if fit:
@@ -200,22 +207,29 @@ def get_as_unsigned(
 
 
 @overload
-def get_as_fitting(d: int | np.integer, signed: "bool | Undefined" = False) -> np.integer: ...
+def get_as_fitting(d: int | np.integer, signed: "bool | Undefined" = False,
+                   acc_floats: bool = False) -> np.integer: ...
 
 
 @overload
-def get_as_fitting(d: npt.ArrayLike, signed: "bool | Undefined" = False) -> np.ndarray: ...
+def get_as_fitting(d: npt.ArrayLike, signed: "bool | Undefined" = False,
+                   acc_floats: bool = False) -> np.ndarray: ...
 
 
 def get_as_fitting(
         d: npt.ArrayLike,
         signed: "bool | Undefined" = False,
+        acc_floats: bool = False,
 ) -> np.ndarray | np.integer:
     """Cast to the smallest dtype of the family that fits min/max of d."""
-    scalar = isinstance(d, (int, np.integer))
+    scalar = isinstance(d, (int, np.integer, float, np.floating))
     a = np.asarray(d)
 
-    if a.dtype.kind not in ("i", "u"):
+    if a.dtype.kind == "f":
+        if not acc_floats or not (np.mod(a, 1) == 0).all():
+            raise TypeError("Expected an integer array")
+        a = a.astype(np.int64)
+    elif a.dtype.kind not in ("i", "u"):
         raise TypeError("Expected an integer array")
 
     target = _get_type_for_bounds(int(np.min(a)), int(np.max(a)), signed)

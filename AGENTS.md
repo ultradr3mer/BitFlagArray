@@ -51,7 +51,7 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 - Fehlermeldungen **verbatim** (Tippfehler sind Absicht): `Exception("value to big")` / `Exception("to many bits requested")`.
 - Annotation `signed: "bool | Undefined"` muss ein **String** sein — `bool | Literal` crasht zur Laufzeit.
 - Funktionen, die `INTEGER_TYPES` mehrfach nutzen: lokal `type_tbl = INTEGER_TYPES` aliasen.
-- `get_as_unsigned(..., allow_integer_floats=True)`: go-to für Integer-Normalisierung — castet ganzzahlige Floats (Skalar + Array), nicht-ganzzahlige → `TypeError("Expected an integer array")`.
+- `acc_floats`-Parameter (`get_as_signed`/`get_as_unsigned`/`get_as_fitting`): go-to für Integer-Normalisierung — castet ganzzahlige Floats (Skalar + Array), nicht-ganzzahlige → `TypeError("Expected an integer array")`.
 
 ## Mulitslice / Bit-Selektion
 - Konvention MSB-first (Bit 0 = MSB), wie BitFlagArray; Runs landen im Ziel in Auswahl-Reihenfolge.

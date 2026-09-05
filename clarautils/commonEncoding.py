@@ -77,15 +77,15 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[in
 
 
 def get_bits(value: np.ndarray | int | str | CommonNBitSc, count=None,
-             allow_integer_floats: bool = False):
+             acc_floats: bool = False):
     from BitInfo import BitInfo
-    return BitInfo.from_value(value, count, BitInfo.Mode.BITS, allow_integer_floats)
+    return BitInfo.from_value(value, count, BitInfo.Mode.BITS, acc_floats)
 
 
 def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None,
-                  allow_integer_floats: bool = False) -> np.ndarray:
+                  acc_floats: bool = False) -> np.ndarray:
     from BitInfo import BitInfo
-    return BitInfo.from_value(value, count, BitInfo.Mode.FLAGS, allow_integer_floats)
+    return BitInfo.from_value(value, count, BitInfo.Mode.FLAGS, acc_floats)
 
 def normalize_flags(idx: npt.ArrayLike, bit: npt.ArrayLike=None) -> Tuple[int,int,int]:
     idx = np.array(idx)
