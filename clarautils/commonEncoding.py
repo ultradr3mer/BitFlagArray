@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from clarautils import get_as_unsigned
 
-from .commonTyping import get_type_for_array, get_type_for_bit_count
+from commonTyping import get_type_for_array, get_type_for_bit_count
 
 
 @dataclass(frozen=True)

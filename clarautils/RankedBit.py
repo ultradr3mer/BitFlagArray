@@ -1,19 +1,15 @@
-from bisect import bisect_right
 from itertools import combinations
 from math import comb
-from typing import Dict, List, NamedTuple, Tuple
+from typing import Dict, List, NamedTuple, Tuple, Literal
+from clarautils import BitInfo
 
 import numpy as np
 import numpy.typing as npt
 
-from clarautils import Bitty, NBitAryOnly
-from clarautils.common import gen_labels
+from BitFlagArray import Bitty, NBitAryOnly
 
-try:
-    from clarautils.commonEncoding import get_bit_flags, normalize_flags
-    from clarautils.commonTyping import get_as_fitting, get_as_unsigned
-    from clarautils.commonEncoding import get_bit_flags, normalize_flags
-    from clarautils.commonTyping import get_as_fitting, get_as_unsigned
+from commonEncoding import get_bit_flags, normalize_flags
+from commonTyping import get_as_fitting, get_as_unsigned
 
 
 def bits_combs_by_rank(bit_mask: int) -> npt.NDArray:
@@ -32,20 +28,6 @@ def bits_rank_first_from_flags(bit_flags, min_r: int = 0, max_r: "int | None" = 
                             for r in range(min_r, max_r)
                             for p in combinations(bit_flags, r + 1)],
                            fit=True)
-
-
-# def get_comb_idx(comb_items, value_mask, value_rank) -> "Tuple[int, Tuple[int, ...] | None]":
-#     # brute-force referenz: (lex-index, naechste kombination), None wenn keine folgt
-#     next_return = False
-#     return_idx = -1
-#     for i, c in enumerate(combinations(comb_items, value_rank)):
-#         if next_return:
-#             return return_idx, c
-#         if sum(c) == value_mask:
-#             return_idx = i
-#             next_return = True
-#     return return_idx, None
-
 
 def rank_states_per_rank(mask_rank: int, rank_slice: "slice | int | npt.ArrayLike") -> np.ndarray:
     ranks_idx = np.atleast_1d(np.arange(mask_rank)[rank_slice])
@@ -95,31 +77,45 @@ class RankIndexMin(NamedTuple):
 
     @staticmethod
     def idx_from_pos(pos: np.ndarray) -> np.ndarray:
-        if not (np.min(pos, axis=0) == np.arange(pos.size)).all():
+        pos_flr = np.arange(pos.shape[1])
+        if not (np.min(pos, axis=0) == pos_flr).all():
             raise ValueError("pos not in range -> r_min save required")
-        return pos - np.arange(pos.size)
+        return pos - pos_flr
 
     @staticmethod
     def pos_from_idx(idx: np.ndarray) -> np.ndarray:
-        return idx + np.arange(idx.size)
+        return idx + np.arange(idx.shape[1])
 
     @classmethod
     def create(cls, mask_rank: int, val_rank: int) -> 'RankIndexMin':
-        comb_items = gen_labels(mask_rank)
+        # comb_items = gen_labels(mask_rank)
 
         full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)])
         full_idx = cls.idx_from_pos(full_tbl)
+
+        bit_used_binf = BitInfo.from_value(np.max(full_idx, axis=0), mode=BitInfo.Mode.B_COUNT)
         bit_used = [int(m).bit_count() for m in np.max(full_idx, axis=0)]
+        if not (bit_used_binf == bit_used).all():
+            raise ValueError("bit_used_binf and bit_used do not match")
+
         n_bit_cols = [NBitAryOnly(c,b) for c, b in zip(full_idx, bit_used)]
         bty = Bitty.stack_items(*n_bit_cols)
 
-    @staticmethod
-    def get_or_create(mask_rank: int, val_rank: int) -> RankIndexMin:
-        instance = _INSTANCE_CACHE.get((mask_rank, val_rank))
+        return RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
+
+    @classmethod
+    def get_or_create(cls, mask_rank: int, val_rank: int) -> RankIndexMin:
+        key = (mask_rank, val_rank)
+
+        instance = _INSTANCE_CACHE.get(key)
+        if instance is None:
+            instance = cls.create(mask_rank, val_rank)
+            _INSTANCE_CACHE[key] = instance
+
         return instance
 
-    if __name__ == '__main__':
-        demo = RankedBit.from_bits([1, 0, 1], [1, 2, 3])
+if __name__ == '__main__':
+    demo = RankIndexMin.get_or_create(5,3)
     # mask / value rank
 #
 # class _RankIndex(NamedTuple):
