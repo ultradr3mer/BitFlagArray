@@ -1,8 +1,8 @@
-from dataclasses import dataclass
-from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, overload, Literal, TYPE_CHECKING, Tuple
+import string
+from typing import TypeVar, Generic, Type, List, Iterable, Any
 
 import numpy as np
-import numpy.typing as npt
+
 
 def safe_iter(iter, default):
     try:
@@ -96,4 +96,16 @@ def iter_bits(data):
         for i in range(8):
             yield (byte >> (7 - i)) & 1
 
+def gen_labels(count: int):
+    asci = string.ascii_uppercase
+    alpha_len = len(asci)
+    if count <= alpha_len:
+        return asci[count:]
+
+    # Then: A0 to Z0, A1 to Z1, ...
+    reps = count // alpha_len
+    numbers = np.array(np.arange(reps), np.uint32)
+    width = len(str(reps))
+    table = [f"{letter}{str(n).zfill(width)}" for letter in string.ascii_uppercase for n in numbers]
+    return table[:count]
 
