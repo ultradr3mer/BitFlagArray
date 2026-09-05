@@ -9,10 +9,6 @@ import numpy.typing as npt
 from clarautils import get_as_unsigned, get_type_for_bit_count, get_as_fitting
 from clarautils.commonEncoding import get_bit_flags, normalize_flags
 
-
-
-
-
 def bits_combs_by_rank(bit_mask: int)-> npt.NDArray:
     flags = get_bit_flags(bit_mask)
     item_count = flags.size
@@ -60,11 +56,15 @@ class RankedBit(NamedTuple):
 
         @property
         def index_in_rank(self) -> int:
-            return np.sum(self.position)
+            return np.sum(self.bitwise_index)
+
     class Info(NamedTuple): # TODO __repr__ DIese klassen sind eine gute gelegenheit eine visiualierung zu bauen
         rank_info: RankedBit.RankInfo
         comb_info: RankedBit.CombInfo
 
+        @property
+        def global_index(self) -> int:
+            return self.rank_info.index_floor + self.comb_info.index_in_rank
 
 
     bit_mask: int
@@ -89,7 +89,7 @@ class RankedBit(NamedTuple):
         mask_rank, mask_flags, val_rank, value_flags = self.expand()
 
         bitwise_pos = np.where(mask_flags & self.bit_value)[0] ## WILL BECOME IMPORTANT FOR ITERATING
-        comb_info = RankedBit.CombInfo(bitwise_pos)
+        comb_info = RankedBit.CombInfo(bitwise_pos) # Die methode stimmt noch nicht
         # bitwise_idx = bitwise_pos - np.arange(len(bitwise_pos)) ## ggf get_comb_idx(mask_flags, self.bit_value, val_rank) angleichen
         # combined_id = np.sum(bitwise_idx)
         index_in_comb = get_comb_idx(mask_flags, self.bit_value, val_rank)
@@ -105,7 +105,9 @@ class RankedBit(NamedTuple):
         return RankedBit.RankInfo(val_rank, rank_floor)
 
     def get_info(self) -> RankedBit.Info:
-        return RankedBit.Info(self.get_rank_info(), self.get_comb_info())
+        r_info = self.get_rank_info()
+        c_info = self.get_comb_info()
+        return RankedBit.Info(r_info, c_info)
 
     @staticmethod
     def _build_int(value: int | npt.ArrayLike) -> int:
