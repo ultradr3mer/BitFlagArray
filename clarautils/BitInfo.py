@@ -22,10 +22,20 @@ class BitInfo:
         Mode.FLAGS, Mode.INDICES, Mode.B_COUNT
     }
 
+
     @staticmethod
     def from_value(value: npt.ArrayLike | int | str | CommonNBitSc,
                    bit_count: int | None = None, mode: resultMode = Mode.BITS,
                    acc_floats: bool = False):
+        def get_signed_or_raise(v_sub: npt.ArrayLike | int):
+            if not isinstance(v_sub, (float, np.floating)):
+                return v_sub
+            if acc_floats:
+                return get_as_unsigned(v_sub, fit=True, acc_floats=True)
+            else:
+                raise Exception(
+                    "Float not allowed, but provided, use acc_floats=True to let BitInfo get a shot at parsing them")
+
         mode = BitInfo.Mode(mode)
 
         if isinstance(value, str):
@@ -34,15 +44,13 @@ class BitInfo:
         if isinstance(value, CommonNBitSc):
             bit_count, value = value.bit_count, value.value
 
-        if acc_floats and isinstance(value, (float, np.floating)):
-            value = get_as_unsigned(value, fit=True, acc_floats=True) # Hier das erste mal
-
         bit_count = int(bit_count if bit_count is not None and bit_count > 0
                         else get_bit_count(np.max(value)))
         bit_range_bits = np.arange(bit_count - 1, -1, -1)
         flags_range = np.array(1 << np.arange(bit_count))
 
         if np.isscalar(value):
+            value = get_signed_or_raise(value)
             if mode in BitInfo.FLAGS_SUBTYPES:
                 res = value & flags_range
                 if mode == BitInfo.Mode.B_COUNT:
@@ -55,7 +63,7 @@ class BitInfo:
             if mode == BitInfo.Mode.BITS:
                 return (get_as_signed(value) >> bit_range_bits) & 1
         else:
-            value = get_as_unsigned(value, fit=True, acc_floats=acc_floats) # HIER NOCHMAL?
+            value = get_signed_or_raise(value)
             if mode in BitInfo.FLAGS_SUBTYPES:
                 res = value.reshape((-1, 1)) & flags_range
                 if mode == BitInfo.Mode.B_COUNT:
