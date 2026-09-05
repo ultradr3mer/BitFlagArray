@@ -5,9 +5,6 @@ from weakref import WeakKeyDictionary
 import numpy as np
 import numpy.typing as npt
 
-from .common import ExceptionRaiser, get_first_or
-
-
 #====================================================
 #           TABLE TYPE DEFINITIONS
 #====================================================

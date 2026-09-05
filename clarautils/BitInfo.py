@@ -4,8 +4,8 @@ from typing import Literal, Iterable
 import numpy as np
 import numpy.typing as npt
 
-from .commonEncoding import CommonNBitSc, get_bit_count, get_number
-from .commonTyping import get_as_signed
+from clarautils import CommonNBitSc, get_bit_count, get_number
+from clarautils import get_as_signed
 
 
 class BitInfo:

@@ -2,9 +2,9 @@ from typing import TypeVar, Generic, List, Iterable, Any, overload, Literal, TYP
 
 import numpy as np
 import numpy.typing as npt
-from .GenericTable import TableFields
-from .QueryableTable import QTblSpecialCol, CCol, Query, Undefined
-from .common import ExcRaiser
+from GenericTable import TableFields
+from QueryableTable import QTblSpecialCol, CCol, Query, Undefined
+from common import ExcRaiser
 
 
 # ====================================================
