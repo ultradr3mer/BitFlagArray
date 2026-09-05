@@ -2,22 +2,20 @@ from itertools import combinations
 from math import comb
 from typing import Dict, List, NamedTuple, Tuple, Literal
 
-from QueryableTableShowcase import item
-from clarautils import BitInfo, SliceView, Multislice
-
 import numpy as np
 import numpy.typing as npt
 
-from BitFlagArray import Bitty, NBitAryOnly
+import BitFlagArray
 
-from commonEncoding import get_bit_flags, normalize_flags
-from commonTyping import get_as_fitting, get_as_unsigned
+import commonEncoding
+import commonTyping
+from clarautils import BitInfo
 
 
 def bits_combs_by_rank(bit_mask: int) -> npt.NDArray:
-    flags = get_bit_flags(bit_mask)
+    flags = commonEncoding.get_bit_flags(bit_mask)
     item_count = flags.size
-    return get_as_fitting([[r_idx, sum(c)] for r_idx in range(0, item_count) for c in combinations(flags, r_idx + 1)])
+    return commonTyping.get_as_fitting([[r_idx, sum(c)] for r_idx in range(0, item_count) for c in combinations(flags, r_idx + 1)])
 
 
 def bits_rank_first(bit_count: int, min_r: int = 0, max_r: "int | None" = None) -> np.ndarray:
@@ -26,10 +24,10 @@ def bits_rank_first(bit_count: int, min_r: int = 0, max_r: "int | None" = None) 
 
 def bits_rank_first_from_flags(bit_flags, min_r: int = 0, max_r: "int | None" = None) -> np.ndarray:
     max_r = len(bit_flags) if max_r is None else max_r
-    return get_as_unsigned([sum(p)
-                            for r in range(min_r, max_r)
-                            for p in combinations(bit_flags, r + 1)],
-                           fit=True)
+    return commonTyping.get_as_unsigned([sum(p)
+                                         for r in range(min_r, max_r)
+                                         for p in combinations(bit_flags, r + 1)],
+                                        fit=True)
 
 def rank_states_per_rank(mask_rank: int, rank_slice: "slice | int | npt.ArrayLike") -> np.ndarray:
     ranks_idx = np.atleast_1d(np.arange(mask_rank)[rank_slice])
@@ -75,20 +73,6 @@ def rank_states(mask_rank: int, val_rank: int) -> int:
 #     index_floors: Bitty
 #     mask_rank: int
 #     val_rank: int
-class IndexKey(NamedTuple):
-    index_slice: slice
-    key_value: int
-
-def build_index(data: SliceView, bit_used_by_cols: np.ndarray) -> None:
-    next_bit = slice(0, bit_used_by_cols[0])
-    index = {}
-    for key, group in data.group_by_bit(slice(0,2)).items():
-        ms = Multislice(group.i)
-        s = ms.get_slices()
-        if len(s) > s:
-        s = slice(np.min(indices), np.max(indices), 1)
-        index[IndexKey(, key)] = "Dummy"
-    pass
 
 
 class RankIndexMin:
@@ -96,7 +80,7 @@ class RankIndexMin:
 
     def __init__(
         self,
-        index_floors: Bitty,
+        index_floors: BitFlagArray.Bitty,
         mask_rank: int,
         val_rank: int,
     ) -> None:
@@ -120,13 +104,13 @@ class RankIndexMin:
     def create(cls, mask_rank: int, val_rank: int) -> 'RankIndexMin':
         # comb_items = gen_labels(mask_rank)
 
-        full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)], fit=True)
+        full_tbl = commonTyping.get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)], fit=True)
         full_tbl = cls.idx_from_pos(full_tbl)
         bit_used_by_col = BitInfo.from_value(np.max(full_tbl, axis=0), mode=BitInfo.Mode.B_COUNT)
 
-        n_bit_cols = [NBitAryOnly(full_tbl[:, i],b) for i, b in enumerate(bit_used_by_col)]
-        bty = Bitty.stack_bit_arys(*n_bit_cols)
-        build_index(bty, bit_used_by_col)
+        n_bit_cols = [BitFlagArray.NBitAryOnly(full_tbl[:, i], b) for i, b in enumerate(bit_used_by_col)]
+        bty = BitFlagArray.Bitty.stack_bit_arys(*n_bit_cols)
+        index = BitFlagArray.BittyIndex(bty, bit_used_by_col)
 
         instance = RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
         return instance
@@ -257,9 +241,9 @@ class RankedBit(NamedTuple):
     def expand(self) -> Tuple[int, npt.NDArray, int, npt.NDArray]:
         if self.bit_value & ~self.bit_mask:
             raise ValueError("val not in mask")
-        mask_flags: npt.NDArray = get_bit_flags(self.bit_mask) if self.bit_mask else np.array([], dtype=np.int64)
+        mask_flags: npt.NDArray = commonEncoding.get_bit_flags(self.bit_mask) if self.bit_mask else np.array([], dtype=np.int64)
         mask_rank = mask_flags.size
-        value_flags: npt.NDArray = get_bit_flags(self.bit_value) if self.bit_value else np.array([], dtype=mask_flags.dtype)
+        value_flags: npt.NDArray = commonEncoding.get_bit_flags(self.bit_value) if self.bit_value else np.array([], dtype=mask_flags.dtype)
         rank = value_flags.size
         if not (np.diff(mask_flags) > 0).all() or not (np.diff(value_flags) > 0).all():
             raise ValueError("val and mask mut not contain same flag twice")
@@ -360,9 +344,9 @@ class RankedBit(NamedTuple):
 
     @classmethod
     def from_bits(cls, bits: npt.ArrayLike, indices: npt.ArrayLike = None) -> "RankedBit":
-        b = get_as_unsigned(bits, fit=True)
-        i = get_as_unsigned(indices, fit=True) if indices is not None else np.arange(b.size)
-        _, mask, value = normalize_flags(i, b)
+        b = commonTyping.get_as_unsigned(bits, fit=True)
+        i = commonTyping.get_as_unsigned(indices, fit=True) if indices is not None else np.arange(b.size)
+        _, mask, value = commonEncoding.normalize_flags(i, b)
         m, v = int(mask), int(value)
         if v & ~m:
             raise ValueError("val not in mask")
