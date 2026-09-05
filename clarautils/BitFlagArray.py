@@ -2,7 +2,7 @@ from abc import abstractmethod, abstractproperty, ABC
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import List, Iterable, Tuple, Dict, Union
-from typing import NamedTuple
+from typing import NamedTuple, Set, Literal
 
 import weakref
 
@@ -697,6 +697,7 @@ class IndexingNode(NamedTuple):
 #     leaf_selector: slice | int | List[int]
 #
 class FluentBuilder:
+    intex_by_options = Literal["key", "slice", "index"]
     _intex_by_options_flags = {'key':1,'slice':2,'index':4}
     def __init__(self, build_target: BitFlagArray, root_selector):
         self.build_target = build_target
@@ -721,7 +722,7 @@ class FluentBuilder:
         self.intex_by_options = self.intex_by_options | _intex_by_options_flags['slice']
         return self
 
-    def index_by_index(self, do=True):
+    def index_by_fullindex(self, do=True):
         self.intex_by_options = self.intex_by_options | _intex_by_options_flags['index']
         return self
 
@@ -737,20 +738,23 @@ class BitFlagIndex:
         self.stucture_leafs = None
 
     @staticmethod
-    def build_index(data: SliceView, selector, ) -> None:
-        key_index: Dict[int, BaseNode]
-        slice_index: Dict[slice, BaseNode]
-        int_index: Dict[int, BaseNode]
+    def build_index(data: SliceView, index_key_selector, index_by_options: Set[Literal]) -> None:
+        key_index = Dict[int, BaseNode]
+        slice_index = Dict[slice, BaseNode]
+        full_index = Dict[int, BaseNode]
 
-        next_bit = slice(0, bit_used_by_cols[0])
-        index = {}
-        for key, group in data.group_by_bit(next_bit).items():
-            ms = Multislice(group.i)
-            s = ms.get_slices()
-            if len(s) > s:
-                raise Exception("More than one slice is not supported")
-            index[IndexKey(s, key)] = "Dummy"
-        pass
+        for key, group in data.group_by_bit(index_key_selector).items():
+            next_node = BuildingNode(group)
+            if index_by_options.issubset('key'):
+                key_index[key] = next_node
+            if index_by_options.issubset('slice'):
+                for s in Multislice(group.i).get_slices():
+                    slice_index[s] = next_node
+            if index_by_options.issubset('index'):
+                for i in group.i:
+                    full_index[i] = next_node
+
+        return IndexingNode(key_index, slice_index, full_index)
 
     def index_by(self, key):
         return FluentBuilder()
