@@ -21,6 +21,7 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 | `clarautils/GenericTable.py` | Table-Framework (`TableFields`, item/range-Varianten, `Table`) — hieß früher `GenricTable.py` |
 | `clarautils/QueryableTable.py` | lazy `Query`/`Constraint`, `ConstraintColumn`=`CCol`, `QueryableTable`, `QTblSpecialCol`, `Undefined` |
 | `clarautils/commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits` |
+| `clarautils/BitInfo.py` | `BitInfo` — `from_value`/`from_string` mit Modi `bits`/`flags`/`indices`/`count` (B_COUNT = Bitlänge am höchsten Wert); `get_bits`/`get_bit_flags` delegieren hierher |
 | `clarautils/BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, LRU-Cache |
 | `clarautils/Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
 | `clarautils/RankedBit.py` | `RankedBit` (rank-first: erst 1-Bit-Werte, dann 2, ...; lex-Ordnung innerhalb Rang wie `itertools.combinations`), `BitGroupWalker` (Odometer über mehrere RankedBit-Masken, Combined = OR) |

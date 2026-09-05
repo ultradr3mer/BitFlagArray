@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from clarautils import get_as_unsigned
 
-from .commonTyping import get_type_for_array, get_as_signed, get_type_for_bit_count
+from .commonTyping import get_type_for_array, get_type_for_bit_count
 
 
 @dataclass(frozen=True)
@@ -77,45 +77,13 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[in
 
 
 def get_bits(value: np.ndarray | int | str | CommonNBitSc, count=None):
-    if isinstance(value, str):
-        return [1 if c == '1' else 0 for c in value]
+    from .BitInfo import BitInfo
+    return BitInfo.from_value(value, count, BitInfo.Mode.BITS)
 
-    bit_count = value.bit_count if isinstance(value, CommonNBitSc) \
-                    else int(count if count is not None and count > 0
-                    else get_bit_count(np.max(value)))
-    bit_range = np.arange(bit_count - 1, -1, -1)
 
-    if isinstance(value, CommonNBitSc):
-        value = value.value
-
-    if np.isscalar(value):
-        return (value >> bit_range) & 1
-    elif isinstance(value, np.ndarray):
-        return (get_as_signed(value.reshape((-1, 1))) >> bit_range) & 1
-    else:
-        raise Exception("invalid Value")
-
-def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None) ->  np.ndarray:
-    if isinstance(value, str):
-        return [1 if c == '1' else 0 for c in value]
-
-    bit_count = value.bit_count if isinstance(value, CommonNBitSc) \
-        else int(count if count is not None and count > 0
-                 else get_bit_count(np.max(value)))
-    bit_range = np.arange(bit_count)
-    flags = (1 << bit_range)
-
-    if isinstance(value, CommonNBitSc):
-        value = value.value
-
-    if np.isscalar(value):
-        res = value & flags
-        return get_as_signed(res[np.nonzero(res)], fit=True)
-    elif isinstance(value, np.ndarray):
-        res = value.reshape((-1, 1)) & flags
-        return get_as_signed(res[np.nonzero(res)], fit=True)
-    else:
-        raise Exception("invalid Value")
+def get_bit_flags(value: np.ndarray | int | str | CommonNBitSc, count=None) -> np.ndarray:
+    from .BitInfo import BitInfo
+    return BitInfo.from_value(value, count, BitInfo.Mode.FLAGS)
 
 def normalize_flags(idx: npt.ArrayLike, bit: npt.ArrayLike=None) -> Tuple[int,int,int]:
     idx = np.array(idx)
