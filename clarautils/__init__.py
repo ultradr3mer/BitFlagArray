@@ -67,6 +67,16 @@ from .QueryableTable import (
     build_type_table,
 )
 from .Mulitslice import Multislice
+from .RankedBit import (
+    RankedBit,
+    BitGroupWalker,
+    bits_rank_first,
+    bits_rank_first_from_flags,
+    bits_combs_by_rank,
+    get_comb_idx,
+    rank_states,
+    rank_states_per_rank,
+)
 from .BitFlagArray import (
     NBitArray,
     NBitAryOnly,
@@ -110,6 +120,8 @@ __all__ = [
     "Query", "Constraint", "ConstraintColumn", "CCol", "QueryableTable", "QTblSpecialCol",
     "Undefined", "build_type_table",
     "Multislice",
+    "RankedBit", "BitGroupWalker", "bits_rank_first", "bits_rank_first_from_flags",
+    "bits_combs_by_rank", "get_comb_idx", "rank_states", "rank_states_per_rank",
     "NBitArray", "NBitAryOnly", "BitFlagArray", "Bitty", "DefinedBit", "SliceView", "sliceTypes",
     "slice_union", "slice_intersection", "slices_to_indices", "indices_to_slices",
     "normalize_key", "get_slice_item_count", "put_bits", "merge_slices", "limit_to_bit_count",

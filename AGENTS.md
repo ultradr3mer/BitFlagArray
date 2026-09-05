@@ -23,6 +23,7 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 | `clarautils/commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits` |
 | `clarautils/BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, LRU-Cache |
 | `clarautils/Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
+| `clarautils/RankedBit.py` | `RankedBit` (rank-first: erst 1-Bit-Werte, dann 2, ...; lex-Ordnung innerhalb Rang wie `itertools.combinations`), `BitGroupWalker` (Odometer über mehrere RankedBit-Masken, Combined = OR) |
 | `Multislice.md` | Benchmarks + Faustregeln zur Bit-Selektion |
 | `GenericTableOld.py` | deprecated, Importblock auskommentiert — unberührt lassen |
 | `README.md` | **veraltet** (PlainTable/TableCreator-Ära) — nicht vertrauen |
