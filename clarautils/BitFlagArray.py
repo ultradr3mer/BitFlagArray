@@ -9,7 +9,30 @@ import weakref
 import numpy as np
 import numpy.typing as npt
 
-from commonTyping import get_type_for_bit_count
+try:
+    from .commonTyping import get_type_for_bit_count
+    from .commonEncoding import (
+        get_bitmask,
+        get_number,
+        get_bits,
+        CommonNBitAry,
+        get_bitwise_entropy,
+        get_bitwise_mean,
+        get_defined_bits,
+        DefinedBit,
+    )
+except ImportError:
+    from commonTyping import get_type_for_bit_count
+    from commonEncoding import (
+        get_bitmask,
+        get_number,
+        get_bits,
+        CommonNBitAry,
+        get_bitwise_entropy,
+        get_bitwise_mean,
+        get_defined_bits,
+        DefinedBit,
+    )
 
 
 # ------------------------------------------------------------------ #
@@ -676,91 +699,186 @@ class SliceView(NBitArray):
 # ------------------------------------------------------------------ #
 #  Indexer for espeacialiy Ranked Bit Combinations
 # ------------------------------------------------------------------ #
+_BY_KEY = 1
+_BY_SLICE = 2
+_BY_INDEX = 4
+
+
 class IndexKey(NamedTuple):
     index_slice: slice
     key_value: int
 
-class BaseNode(NamedTuple):
-    pass
 
-class BuildingNode(BaseNode): # wird währen des konstruierens verwendet
-    SliceView: SliceView
+class BaseNode:
+    """Gemeinsame Basis der Index-Baum-Knoten."""
 
-class IndexingNode(NamedTuple):
+
+@dataclass(frozen=True)
+class BuildingNode(BaseNode):  # wird währen des konstruierens verwendet
+    view: SliceView
+
+
+@dataclass(frozen=True)
+class IndexingNode(BaseNode):
     key_index: Dict[int, BaseNode]
     slice_index: Dict[slice, BaseNode]
     int_index: Dict[int, BaseNode]
-#
-# class IndexingStructure(NamedTuple):
-#     root_selector: slice | int | List[int]
-#     intermdiate_selector: List[slice | int | List[int]]
-#     leaf_selector: slice | int | List[int]
-#
+
+
+@dataclass(frozen=True)
+class LeafNode(BaseNode):
+    data: BitFlagArray
+    key_path: Tuple[int, ...]
+    item_indices: List[int]
+
+
+def _key_levels(key) -> List:
+    # NBitAryOnly-liste -> ein level pro spalte, sonst ein level mit dem key
+    if isinstance(key, (list, tuple)):
+        if not key:
+            return []
+        if all(isinstance(k, NBitAryOnly) for k in key):
+            return list(key)
+    return [key]
+
+
+def _key_to_selector(key):
+    # NBitAryOnly-spalte -> die ersten bit_count bits des aktuellen views
+    if isinstance(key, NBitAryOnly):
+        return slice(0, key.get_bit_count())
+    return key
+
+
+def _finalize_leaf(node: BuildingNode, key_path: Tuple[int, ...]) -> LeafNode:
+    return LeafNode(
+        data=node.view.materialize(),
+        key_path=key_path,
+        item_indices=[int(i) for i in node.view.get_item_indices()],
+    )
+
+
 class FluentBuilder:
-    intex_by_options = Literal["key", "slice", "index"]
-    _intex_by_options_flags = {'key':1,'slice':2,'index':4}
-    def __init__(self, build_target: BitFlagArray, root_selector):
+    def __init__(self, build_target: "BitFlagIndex", root_selector):
         self.build_target = build_target
         self.root_selector = root_selector
-        self.intermediate_selector = []
+        self.intermediate_selector: List = []
         self.leaf_selector = None
-        self.intex_by_options: int = 0
+        self.index_by_options: int = 0
+        self._options_explicit = False
 
-    def then_by(self, key):
-        self.intermediate_selector.append(key)
-        pass
+    def then_by(self, key) -> "FluentBuilder":
+        self.intermediate_selector.extend(_key_levels(key))
+        return self
 
-    def with_leafs(self, key):
+    def with_leafs(self, key) -> "FluentBuilder":
         self.leaf_selector = key
-        pass
-
-    def index_by_key(self, do=True):
-        self.intex_by_options = self.intex_by_options | _intex_by_options_flags['key']
         return self
 
-    def index_by_slice(self, do=True):
-        self.intex_by_options = self.intex_by_options | _intex_by_options_flags['slice']
+    def index_by_key(self, do=True) -> "FluentBuilder":
+        self.index_by_options = (self.index_by_options | _BY_KEY) if do \
+            else (self.index_by_options & ~_BY_KEY)
+        self._options_explicit = True
         return self
 
-    def index_by_fullindex(self, do=True):
-        self.intex_by_options = self.intex_by_options | _intex_by_options_flags['index']
+    def index_by_slice(self, do=True) -> "FluentBuilder":
+        self.index_by_options = (self.index_by_options | _BY_SLICE) if do \
+            else (self.index_by_options & ~_BY_SLICE)
+        self._options_explicit = True
         return self
 
-    def build(self):
+    def index_by_fullindex(self, do=True) -> "FluentBuilder":
+        self.index_by_options = (self.index_by_options | _BY_INDEX) if do \
+            else (self.index_by_options & ~_BY_INDEX)
+        self._options_explicit = True
+        return self
+
+    def build(self) -> "BitFlagIndex":
+        if not self._options_explicit:
+            self.index_by_options = _BY_KEY
+        self.build_target._build_structure(
+            self.root_selector,
+            self.intermediate_selector,
+            self.leaf_selector,
+            self.index_by_options,
+        )
         return self.build_target
+
 
 class BitFlagIndex:
     def __init__(self, bty: Bitty, dispose_bitty=True):
         self.bty = bty
-        self.root_node: IndexingNode = None
-        self.stucture_root_key = None
-        self.stucture_sub_keys = []
-        self.stucture_leafs = None
+        self.dispose_bitty = dispose_bitty
+        self.root_node: "IndexingNode | None" = None
+        self.structure_root_key = None
+        self.structure_sub_keys: List = []
+        self.structure_leafs = None
+
+    def index_by(self, key) -> FluentBuilder:
+        levels = _key_levels(key)
+        if not levels:
+            raise ValueError("empty index key")
+        builder = FluentBuilder(self, levels[0])
+        if len(levels) > 1:
+            builder.then_by(levels[1:])
+        return builder
+
+    def _build_structure(self, root_key, sub_keys, leaf_key, index_by_options: int):
+        if self.root_node is not None:
+            raise RuntimeError("index already built")
+        self.structure_root_key = root_key
+        self.structure_sub_keys = list(sub_keys)
+        self.structure_leafs = leaf_key
+        level_keys = [root_key] + list(sub_keys)
+        if leaf_key is not None:
+            level_keys.append(leaf_key)
+        self.root_node = self.build_index(self.bty, level_keys, index_by_options)
+        if self.dispose_bitty:
+            self._dispose_bitty()
 
     @staticmethod
-    def build_index(data: SliceView, index_key_selector, index_by_options: Set[Literal]) -> None:
-        key_index = Dict[int, BaseNode]
-        slice_index = Dict[slice, BaseNode]
-        full_index = Dict[int, BaseNode]
+    def build_index(data: NBitArray, level_keys: List, index_by_options: int,
+                   key_path: Tuple[int, ...] = ()) -> BaseNode:
+        key_selector = _key_to_selector(level_keys[0])
+        key_index: Dict[int, BaseNode] = {}
+        slice_index: Dict[slice, BaseNode] = {}
+        int_index: Dict[int, BaseNode] = {}
 
-        for key, group in data.group_by_bit(index_key_selector).items():
-            next_node = BuildingNode(group)
-            if index_by_options.issubset('key'):
-                key_index[key] = next_node
-            if index_by_options.issubset('slice'):
-                for s in Multislice(group.i).get_slices():
-                    slice_index[s] = next_node
-            if index_by_options.issubset('index'):
-                for i in group.i:
-                    full_index[i] = next_node
+        for key_val, group in data.group_by_bit(key_selector).items():
+            key_val = int(key_val)
+            path = key_path + (key_val,)
+            if len(level_keys) > 1:
+                child = BitFlagIndex.build_index(group, level_keys[1:], index_by_options, path)
+            else:
+                child = _finalize_leaf(BuildingNode(group), path)
+            if index_by_options & _BY_KEY:
+                key_index[key_val] = child
+            if index_by_options & (_BY_SLICE | _BY_INDEX):
+                item_indices = [int(i) for i in group.get_item_indices()]
+                if index_by_options & _BY_SLICE:
+                    for s in ndarray_to_slice_list(item_indices):
+                        slice_index[s] = child
+                if index_by_options & _BY_INDEX:
+                    for i in item_indices:
+                        int_index[i] = child
 
-        return IndexingNode(key_index, slice_index, full_index)
+        return IndexingNode(key_index, slice_index, int_index)
 
-    def index_by(self, key):
-        return FluentBuilder()
-        pass
+    def get(self, key_path) -> BaseNode:
+        if self.root_node is None:
+            raise RuntimeError("index not built")
+        if isinstance(key_path, (int, np.integer)):
+            key_path = (key_path,)
+        node = self.root_node
+        for key_val in key_path:
+            node = node.key_index[int(key_val)]
+        return node
 
-
+    def _dispose_bitty(self):
+        if self.bty is None:
+            return
+        root_arr = self.bty.get_array()
+        self.bty = None
+        cache_invalidate_root(id(root_arr))
 
 
 BittyIndex = BitFlagIndex

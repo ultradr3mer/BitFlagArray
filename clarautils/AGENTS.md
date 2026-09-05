@@ -16,7 +16,7 @@ Quelle: `F:\source\BitFlagArray`, installiert per `pip install -e F:\source\BitF
 | `QueryableTable.py` | lazy `Query`/`Constraint`, `ConstraintColumn`=`CCol`, `QueryableTable`, `QTblSpecialCol`, `Undefined` |
 | `commonEncoding.py` | `CommonNBitAry`/`CommonNBitSc`, `get_number`/`get_bits`, Hex/Bit-Konvertierung |
 | `BitInfo.py` | `BitInfo` — zusammengeführte Bit-Abfrage (`from_value`/`from_string`, Modi `bits`/`flags`/`indices`/`count`); `get_bits`/`get_bit_flags` in commonEncoding delegieren dorthin |
-| `BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, Bit-Selektion (`select_bits*`), LRU-Cache |
+| `BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, Bit-Selektion (`select_bits*`), LRU-Cache, `BitFlagIndex`/`BittyIndex` + `FluentBuilder` (Index-Baum über `group_by_bit`) |
 | `Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
 | `RankedBit.py` | `RankedBit` (rank-first Iteration), `BitGroupWalker` (Odometer über Gruppen), `bits_rank_first*` |
 
@@ -34,7 +34,8 @@ Quelle: `F:\source\BitFlagArray`, installiert per `pip install -e F:\source\BitF
 - `Undefined`-Sentinel (QueryableTable): `column == Undefined` → immer-wahre Bedingung (bei `get_type_for_*` = beide Vorzeichen-Familien).
 - `signed`-Tri-State in commonTyping: `False` (nur unsigned), `True` (nur signed), `Undefined` (beide).
 - Bit-Konvention **MSB-first** (Bit 0 = MSB); Shifts immer signed rechnen (`.astype(np.intp)`) — unsigned wrappt.
-- **RankedBit**: Reihenfolge rank-first (erst alle Werte mit 1 Bit, dann 2, ...), innerhalb eines Rangs lexikographisch wie `itertools.combinations`; `bit_count` = Popcount der Maske (= mask_rank); empty (`bit_value=0`) hat `global_index` -1; `get_next(max_rank_idx)` grenzt Ranks ein (0-basierter Rang-Index), sonst Lauf bis volle Maske; `BitGroupWalker` verlangt paarweise disjunkte Masken, iteriert product-artig (innerste Gruppe zuerst) und liefert das OR als Combined-Zahl.
+- **RankedBit**: Reihenfolge rank-first (erst alle Werte mit 1 Bit, dann 2, ...), innerhalb eines Rangs lexikographisch wie `itertools.combinations`; `bit_count` = Popcount der Maske (= mask_rank); empty (`bit_value=0`) hat `global_index` -1; `get_next(max_rank_idx)` grenzt Ranks ein (0-basierter Rang-Index), sonst Lauf bis volle Maske; `BitGroupWalker` verlangt paarweise disjunkte Masken, iteriert product-artig (innerste Gruppe zuerst) und liefert das OR als Combined-Zahl. Achtung: `get_next`/`_from_global_index`/`get_info` sind aktuell Stubs (WIP — Neubau auf `RankIndexMin`/`BittyIndex`-Basis, Anker-Funktionen auskommentiert).
+- **BitFlagIndex**/`BittyIndex`: Index-Baum über `group_by_bit`. FluentBuilder: `index_by(root_key).then_by(keys).with_leafs(leaf_key).index_by_key/slice/fullindex().build()`; eine NBitAryOnly-Liste ergibt ein Level pro Spalte (Schlüssel = die ersten `bit_count` Bits des aktuellen Views), sonst ein Level pro Key. Pro Level opt-in Maps: `key_index` (Default, wenn nichts explizit gesetzt), `slice_index` (Runs, `slice(a,b,1)`-Keys), `int_index` (absolute Root-Item-Indizes) — Maps zeigen immer auf das Kind des eigenen Levels. Blätter = `LeafNode(data, key_path, item_indices)`, materialisiert; `dispose_bitty=True` verwirft die Bitty nach `build()` + invalidiert deren Cache-Einträge.
 
 ## Regeln
 - Fehlermeldungen **verbatim** (Tippfehler sind Absicht): `"value to big"` / `"to many bits requested"`.
