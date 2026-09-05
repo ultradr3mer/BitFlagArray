@@ -55,30 +55,34 @@ def rank_states(mask_rank: int, val_rank: int) -> int:
     return sum(comb(mask_rank, i) for i in range(1, val_rank))
 
 ###############################
-# Positionen vs BitwiseIndex vs Single Scalar Idx
-#################################
+# Umbruch-Anker: Positionen vs Index (n=6, rang 3)
+###############################
+# A = anker/segmentstart: letzte spalte beginnt direkt hinter der vorletzten
 #
-#      1,2,3     1,2,3    0
-#      1,2,4     1,2,4    1
-#      1,2,5     1,2,5    2
-#      1,2,6     1,2,6    3
-#      1,3,4     1,3,4    4 <<< Index hier
-#      1,3,5     1,3,5    5
-#      1,3,6     1,3,6    6
-#      1,4,5     1,4,5    7 <<< Index
-#      1,4,6     1,4,6    8
-#      1,5,6     1,5,6    9 <<< Index
-#      2,3,4     2,3,4    10 <<< Index
-#      2,3,5     2,3,5    11
-#      2,3,6     2,3,6    12
-#      2,4,5     2,4,5    13 <<< Index
-#      2,4,6     2,4,6    14
-#      2,5,6     2,5,6    15 <<< Index
-#      3,4,5     3,4,5    16 <<< Index
-#      3,4,6     3,4,6    17
-#      3,5,6     3,5,6    18 <<< Index
-#      4,5,6     4,5,6    19
-# TODO
+#      komb     pos      idx
+#      1,2,3    0,1,2      0   A   rang-start
+#      1,2,4    0,1,3      1
+#      1,2,5    0,1,4      2
+#      1,2,6    0,1,5      3       letzte spalte am ende -> umbruch
+#      1,3,4    0,2,3      4   A
+#      1,3,5    0,2,4      5
+#      1,3,6    0,2,5      6       umbruch
+#      1,4,5    0,3,4      7   A
+#      1,4,6    0,3,5      8       umbruch
+#      1,5,6    0,4,5      9   A
+#      2,3,4    1,2,3     10   A
+#      2,3,5    1,2,4     11
+#      2,3,6    1,2,5     12       umbruch
+#      2,4,5    1,3,4     13   A
+#      2,4,6    1,3,5     14       umbruch
+#      2,5,6    1,4,5     15   A
+#      3,4,5    2,3,4     16   A
+#      3,4,6    2,3,5     17       umbruch
+#      3,5,6    2,4,5     18   A
+#      4,5,6    3,4,5     19   A   rang-ende
+#
+# lookup: idx = anker-idx + (letzte pos - vorletzte pos - 1); rang 1: ein anker, wertigkeit 1
+# tabelle im code: _get_rank_index(n) — gepinnt in test_rank_index_anchors_match_table
 
 class _RankIndex(NamedTuple):
     # pro bit-anzahl: umbruch-anker (positionen + index), floors je rang, total
