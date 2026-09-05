@@ -1,7 +1,9 @@
 from itertools import combinations
 from math import comb
 from typing import Dict, List, NamedTuple, Tuple, Literal
-from clarautils import BitInfo
+
+from QueryableTableShowcase import item
+from clarautils import BitInfo, SliceView, Multislice
 
 import numpy as np
 import numpy.typing as npt
@@ -73,58 +75,70 @@ def rank_states(mask_rank: int, val_rank: int) -> int:
 #     index_floors: Bitty
 #     mask_rank: int
 #     val_rank: int
+class IndexKey(NamedTuple):
+    index_slice: slice
+    key_value: int
+
+def build_index(data: SliceView, bit_used_by_cols: np.ndarray) -> None:
+    next_bit = slice(0, bit_used_by_cols[0])
+    index = {}
+    for key, group in data.group_by_bit(slice(0,2)).items():
+        ms = Multislice(group.i)
+        s = ms.get_slices()
+        if len(s) > s:
+        s = slice(np.min(indices), np.max(indices), 1)
+        index[IndexKey(, key)] = "Dummy"
+    pass
+
+
 class RankIndexMin:
     _INSTANCE_CACHE: Dict[Tuple[int, int], RankIndexMin] = {}
 
     def __init__(
         self,
-        # index_floors: Bitty,
+        index_floors: Bitty,
         mask_rank: int,
         val_rank: int,
     ) -> None:
-        self.index_floors: Bitty = None
+        self.index_floors = index_floors
         self.mask_rank = mask_rank
         self.val_rank = val_rank
+        self.total_combinations = comb(mask_rank, val_rank)
 
     @staticmethod
     def idx_from_pos(pos: np.ndarray) -> np.ndarray:
-        pos_flr = np.arange(pos.shape[1])
+        pos_flr = np.arange(pos.shape[1], dtype=np.uint8)
         if not (np.min(pos, axis=0) == pos_flr).all():
             raise ValueError("pos not in range -> r_min save required")
         return pos - pos_flr
 
     @staticmethod
     def pos_from_idx(idx: np.ndarray) -> np.ndarray:
-        return idx + np.arange(idx.shape[1])
+        return idx + np.arange(idx.shape[1], dtype=np.uint8)
 
     @classmethod
     def create(cls, mask_rank: int, val_rank: int) -> 'RankIndexMin':
         # comb_items = gen_labels(mask_rank)
+
         full_tbl = get_as_unsigned([i for i in combinations(range(mask_rank), val_rank)], fit=True)
+        full_tbl = cls.idx_from_pos(full_tbl)
+        bit_used_by_col = BitInfo.from_value(np.max(full_tbl, axis=0), mode=BitInfo.Mode.B_COUNT)
 
-        total_combinations = comb(mask_rank, val_rank)
-        bty = Bitty.empty((total_combinations, mask_rank))
+        n_bit_cols = [NBitAryOnly(full_tbl[:, i],b) for i, b in enumerate(bit_used_by_col)]
+        bty = Bitty.stack_bit_arys(*n_bit_cols)
+        build_index(bty, bit_used_by_col)
+
         instance = RankIndexMin(index_floors=bty, mask_rank=mask_rank, val_rank=val_rank)
-
-        full_idx = cls.idx_from_pos(full_tbl)
-        bit_used_binf = BitInfo.from_value(np.max(full_idx, axis=0), mode=BitInfo.Mode.B_COUNT)
-        bit_used = [int(m).bit_count() for m in np.max(full_idx, axis=0)]
-        if not (bit_used_binf == bit_used).all():
-            raise ValueError("bit_used_binf and bit_used do not match")
-
-        n_bit_cols = [NBitAryOnly(c,b) for c, b in zip(full_idx, bit_used)]
-        bty = Bitty.stack_items(*n_bit_cols)
-
-        return
+        return instance
 
     @classmethod
     def get_or_create(cls, mask_rank: int, val_rank: int) -> RankIndexMin:
         key = (mask_rank, val_rank)
 
-        instance = _INSTANCE_CACHE.get(key)
+        instance = cls._INSTANCE_CACHE.get(key)
         if instance is None:
             instance = cls.create(mask_rank, val_rank)
-            _INSTANCE_CACHE[key] = instance
+            cls._INSTANCE_CACHE[key] = instance
 
         return instance
 

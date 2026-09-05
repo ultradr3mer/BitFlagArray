@@ -11,7 +11,6 @@ from clarautils import get_type_for_bit_count
 from clarautils import get_bitmask, get_number, get_bits
 from clarautils import get_bitwise_entropy, get_bitwise_mean, get_defined_bits, CommonNBitAry
 
-
 # ------------------------------------------------------------------ #
 #  Read-once / cache configuration
 # ------------------------------------------------------------------ #
@@ -28,6 +27,7 @@ def cache_key(root_array: np.ndarray, item_slice, bit_slice) -> tuple:
         if isinstance(s, list):
             return ("l", tuple((x.start, x.stop) for x in s))
         return ("a", s.tobytes())
+
     return (id(root_array), sk(item_slice), sk(bit_slice))
 
 
@@ -270,7 +270,7 @@ def select_bits_multi(data: 'NBitAryOnly', slices: List[slice]) -> 'NBitAryOnly'
     return NBitAryOnly(result, n)
 
 
-def invert_key(key, max_length:int):
+def invert_key(key, max_length: int):
     key = normalize_key(key, max_length)
     mask = np.ones(max_length, dtype=bool)
     if isinstance(key, list):
@@ -282,6 +282,7 @@ def invert_key(key, max_length:int):
         mask[key] = False
     return normalize_key(mask, max_length)
 
+
 def get_indices(key, length: int) -> List[int]:
     if isinstance(key, slice):
         start, stop, step = key.indices(length)
@@ -292,6 +293,7 @@ def get_indices(key, length: int) -> List[int]:
             result.extend(range(s.start, s.stop))
         return result
     return list(key)
+
 
 def index_array(array: np.ndarray, key) -> np.ndarray:
     if isinstance(key, list) and all(isinstance(x, slice) for x in key):
@@ -341,6 +343,9 @@ class NBitArray(ABC):
     def get_item_count(self) -> int:
         return len(self)
 
+    def get_shape(self) -> Tuple[int, ...]:
+        return (self.get_item_count(), self.get_bit_count())
+
     def get_bitwise(self):
         return get_bits(self.get_array(), self.get_bit_count())
 
@@ -377,6 +382,7 @@ class NBitArray(ABC):
 
     def split_i(self, key) -> Tuple[SliceView, SliceView]:
         return self.i[key], self.rm_i(key)
+
 
 @dataclass
 class NBitAryOnly(NBitArray):
@@ -488,16 +494,30 @@ class BitFlagArray(NBitArray):
         ary = NBitAryOnly.create_from(get_number(ary, axis))
         return BitFlagArray(ary)
 
-    @staticmethod
-    def stack_items(*arrays: NBitArray):
-        all_bit_counts = np.array([a.get_bit_count() for a in arrays])
-        bit_count = all_bit_counts[0]
-        if (bit_count != all_bit_counts[1:]).any():
-            raise ValueError(f"Array muss die Bit-Count des ersten ({bit_count}) haben.")
-
-        array = np.concatenate([a.get_array() for a in arrays])
-
-        return BitFlagArray(array, bit_count)
+    # @classmethod
+    # def stack_items(cls, *arrays: NBitArray):
+    #     def construct_slice(col_bit: int):
+    #         slice_cuts = np.zeros(col_bit.size + 1)
+    #         np.cumsum(col_bit, axis=0, out=slice_cuts[1:])
+    #         return [slice(min, max) for min, max in zip(slice_cuts, slice_cuts[1:])]
+    #
+    #     all_shapes = np.array([a.get_shape() for a in arrays])
+    #     all_bits_counts = all_shapes[:, 1]
+    #     all_item_counts = all_shapes[:, 0]
+    #     bit_per_row = sum(all_bits_counts)
+    #     item_count = np.unique(all_item_counts)
+    #     if item_count.size > 1:
+    #         raise ValueError(f"Array muss die Item-Count des ersten ({bit_count}) haben.")
+    #
+    #     bitty = cls.empty((item_count[0], bit_per_row))
+    #     place_item_view = SliceView(bitty)
+    #     bit_indices = bitty.get_defined_bits()
+    #     for i in range(len(arrays)):
+    #         write_slice = slice(0, single_ary.get_bit_count())
+    #         place_item_view[write_slice].write(single_ary)
+    #         place_item_view.rm_b(write_slice)
+    #
+    #     return BitFlagArray(array, bit_count)
 
     @staticmethod
     def empty(shape: Tuple[int, int]):
