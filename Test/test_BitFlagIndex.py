@@ -76,14 +76,21 @@ def test_multi_level_then_by(bitty):
     np.testing.assert_array_equal(leaf11.data, sub1[1].get_array())
 
 
-def test_with_leafs_sets_leaf_level(bitty):
+def test_with_leafs_selects_leaf_data(bitty):
+    groups = bitty.group_by_bit(2)
     idx = BitFlagIndex(bitty, dispose_bitty=False).index_by(2).with_leafs(1).build()
     assert idx.structure_root_key == 2
     assert idx.structure_sub_keys == []
     assert idx.structure_leafs == 1
-    assert idx.get((0, 1)).item_indices == [1, 2, 5]
-    assert idx.get((1, 0)).item_indices == [0]
-    assert idx.get((1, 1)).item_indices == [3, 4]
+    leaf0 = idx.get(0)
+    leaf1 = idx.get(1)
+    assert isinstance(leaf0, LeafNode)
+    assert leaf0.key_path == (0,)
+    assert leaf1.key_path == (1,)
+    assert leaf0.item_indices == [1, 2, 5]
+    assert leaf1.item_indices == [0, 3, 4]
+    np.testing.assert_array_equal(leaf0.data, groups[0].b[1].get_array())
+    np.testing.assert_array_equal(leaf1.data, groups[1].b[1].get_array())
 
 
 def test_index_by_slice_and_fullindex(bitty):
@@ -175,16 +182,17 @@ def test_ranking_roundtrip_without_bitty():
 
     assert idx.bty is None
     for row, (a, b) in enumerate(tbl):
-        leaf = idx.get((int(a), int(b)))
+        leaf = idx.get(a)
         assert isinstance(leaf, LeafNode)
-        assert leaf.item_indices == [row]
-        assert leaf.key_path == (int(a), int(b))
+        assert leaf.key_path == (int(a),)
+        pos_in_leaf = int(np.flatnonzero(leaf.data == b)[0])
+        assert leaf.item_indices[pos_in_leaf] == row
+        assert (int(a), int(leaf.data[leaf.item_indices.index(row)])) == (int(a), int(b))
         node = idx.root_node
         while isinstance(node, IndexingNode):
             node = node.int_index[row]
         assert node is leaf
-        positions = tuple(np.array(leaf.key_path) + np.arange(2))
-        assert positions == combs[row]
+        assert (int(a) + 0, int(b) + 1) == combs[row]
 
 
 def test_bitty_index_alias():

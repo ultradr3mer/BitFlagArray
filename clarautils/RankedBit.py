@@ -6,11 +6,11 @@ import numpy as np
 import numpy.typing as npt
 
 try:
-    from .BitFlagArray import NBitAryOnly, Bitty, BittyIndex
+    from .BitFlagArray import NBitAryOnly, Bitty, BittyIndex, IndexingNode
     from . import commonEncoding, commonTyping
     from .BitInfo import BitInfo
 except ImportError:
-    from BitFlagArray import NBitAryOnly, Bitty, BittyIndex
+    from BitFlagArray import NBitAryOnly, Bitty, BittyIndex, IndexingNode
     import commonEncoding
     import commonTyping
     from clarautils import BitInfo
@@ -106,6 +106,36 @@ class RankIndexMin:
     def pos_from_idx(idx: np.ndarray) -> np.ndarray:
         return idx + np.arange(idx.shape[1], dtype=np.uint8)
 
+    def row_from_cols(self, col_vals) -> int:
+        # (v0..v_{k-1}) -> index in rang (zeilen-index der tabelle)
+        node = self.inner_index.root_node
+        depth = 0
+        for v in col_vals:
+            if not isinstance(node, IndexingNode):
+                break
+            node = node.key_index[int(v)]
+            depth += 1
+        if isinstance(node, IndexingNode):
+            raise KeyError(f"no leaf for {col_vals}")
+        rest = col_vals[depth:]
+        if len(rest) == 0:
+            return node.item_indices[0]
+        hits = np.flatnonzero(node.data == rest[-1])
+        if hits.size == 0:
+            raise KeyError(f"no row for {col_vals}")
+        return node.item_indices[int(hits[0])]
+
+    def cols_from_row(self, row: int) -> Tuple[int, ...]:
+        # zeilen-index -> (v0..v_{k-1})
+        node = self.inner_index.root_node
+        while isinstance(node, IndexingNode):
+            node = node.int_index[int(row)]
+        col_vals = list(node.key_path)
+        if len(col_vals) < self.val_rank:
+            pos_in_leaf = node.item_indices.index(int(row))
+            col_vals.append(int(node.data[pos_in_leaf]))
+        return tuple(col_vals)
+
     @classmethod
     def create(cls, mask_rank: int, val_rank: int) -> 'RankIndexMin':
         # comb_items = gen_labels(mask_rank)
@@ -123,6 +153,7 @@ class RankIndexMin:
                  .with_leafs(slice(0, col_widths[-1]))
                  .index_by_slice()
                  .index_by_key()
+                 .index_by_fullindex()
                  .build())
 
         instance = RankIndexMin(inner_index=index, mask_rank=mask_rank, val_rank=val_rank)
@@ -218,9 +249,10 @@ class RankCombInfo(NamedTuple):
     @property
     def index_in_rank(self) -> int:
         pos = np.asarray(self.position)
-        if pos.size == 0:
+        if pos.size == 0 or pos.size == self.mask_rank:
             return 0
-        return _lex_rank(self.mask_rank, pos)
+        ri = RankIndexMin.get_or_create(self.mask_rank, pos.size)
+        return ri.row_from_cols(pos - np.arange(pos.size))
 
     @property
     def pos_str(self) -> str:
@@ -287,17 +319,11 @@ class RankedBit(NamedTuple):
         max_rank = mask_rank if max_rank_idx is None else min(max_rank_idx + 1, mask_rank)
         if val_rank > max_rank:
             raise StopIteration
-        if val_rank > 0:
-            pos = np.where(mask_flags & self.bit_value)[0]
-            # nachfolger im rang: letzte erhoehbare spalte +1, rest konsekutiv
-            for j in range(val_rank - 1, -1, -1):
-                if pos[j] < mask_rank - val_rank + j:
-                    nxt = np.concatenate([pos[:j], np.arange(pos[j] + 1, pos[j] + 1 + (val_rank - j))])
-                    return self._with_value(int(np.bitwise_or.reduce(mask_flags[nxt])))
-        # umbruch: naechster rang (erste k+1 kombination)
-        if val_rank + 1 > max_rank or val_rank + 1 > mask_rank:
+        ng = self.global_index + 1
+        ceiling = rank_states(mask_rank, max_rank + 1) if max_rank < mask_rank else (1 << mask_rank) - 1
+        if ng >= ceiling:
             raise StopIteration
-        return self._with_value(int(np.bitwise_or.reduce(mask_flags[:val_rank + 1])))
+        return self._from_global_index(ng)
 
     def _from_global_index(self, gidx: int) -> "RankedBit":
         mask_rank, mask_flags, val_rank, value_flags = self.expand()
@@ -310,8 +336,12 @@ class RankedBit(NamedTuple):
         for k in range(1, mask_rank + 1):
             cnt = comb(mask_rank, k)
             if gidx < floor + cnt:
-                pos = _lex_unrank(mask_rank, k, gidx - floor)
-                return self._with_value(int(np.bitwise_or.reduce(mask_flags[np.array(pos)])))
+                if k == mask_rank:
+                    return self._with_value(int(np.bitwise_or.reduce(mask_flags)))
+                ri = RankIndexMin.get_or_create(mask_rank, k)
+                col_vals = ri.cols_from_row(gidx - floor)
+                pos = np.asarray(col_vals) + np.arange(len(col_vals))
+                return self._with_value(int(np.bitwise_or.reduce(mask_flags[pos])))
             floor += cnt
         raise IndexError("ranked bit index out of range")
 
