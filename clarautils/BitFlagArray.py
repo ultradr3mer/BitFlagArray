@@ -866,14 +866,13 @@ BittyIndex = BitFlagIndex
 
 
 
-
 def build_groups(ary: NBitArray, group_lens: int | Tuple[int, ...],
-                      t_target: Type[NamedTuple] | Type[Tuple] = tuple) -> t_target:
+                      t_target: Type[NamedTuple] = IdxGroupView) -> t_target:
     bit_count = ary.get_bit_count()
     if isinstance(group_lens, int):
         group_lens = [group_lens] * -(-bit_count // group_lens)
     items = [ary.b[s] for s in get_slices_from_diffs(np.cumsum(group_lens) - 1)]
-    result = tuple(items) if t_target is tuple else t_target(*items)
+    result = IdxGroupView(items) if t_target is IdxGroupView else t_target(*items)
     return result
 
 
@@ -888,6 +887,8 @@ class BitFlagGroupView:
     def create_from(cls, ary: NBitArray, group_lens: int | Tuple[int, ...]) -> cls:
         return build_groups(ary, group_lens, cls.group_type)
 
+class IdxGroupView(BitFlagGroupView):
+    groups: List[NBitArray]
 
 class GTest(BitFlagGroupView):
     sign: NBitArray
