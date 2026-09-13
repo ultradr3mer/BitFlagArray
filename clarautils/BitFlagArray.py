@@ -866,16 +866,6 @@ BittyIndex = BitFlagIndex
 
 
 
-def build_groups(ary: NBitArray, group_lens: int | Tuple[int, ...],
-                      t_target: Type[NamedTuple] = IdxGroupView) -> t_target:
-    bit_count = ary.get_bit_count()
-    if isinstance(group_lens, int):
-        group_lens = [group_lens] * -(-bit_count // group_lens)
-    items = [ary.b[s] for s in get_slices_from_diffs(np.cumsum(group_lens) - 1)]
-    result = IdxGroupView(items) if t_target is IdxGroupView else t_target(*items)
-    return result
-
-
 class BitFlagGroupView:
     """Marker base: declare group fields once, create_from builds the NamedTuple."""
 
@@ -884,11 +874,43 @@ class BitFlagGroupView:
         cls.group_type = NamedTuple(cls.__name__, list(get_type_hints(cls).items()))
 
     @classmethod
-    def create_from(cls, ary: NBitArray, group_lens: int | Tuple[int, ...]) -> cls:
-        return build_groups(ary, group_lens, cls.group_type)
+    def create_from(cls, ary: NBitArray, group_lens: int | Tuple[int, ...]) -> "cls":
+        return build_groups(ary, group_lens, cls)
+
 
 class IdxGroupView(BitFlagGroupView):
+    """Generic group container: indexable, one entry per group."""
+
     groups: List[NBitArray]
+
+    def __init__(self, groups: List[NBitArray]):
+        self.groups = groups
+
+    def __getitem__(self, idx):
+        return self.groups[idx]
+
+    def __len__(self):
+        return len(self.groups)
+
+    def __iter__(self):
+        return iter(self.groups)
+
+    def __repr__(self):
+        return f"{type(self).__name__}(groups={self.groups!r})"
+
+
+def build_groups(ary: NBitArray, group_lens: int | Tuple[int, ...],
+                 t_target: Type[NamedTuple] | Type[BitFlagGroupView] = IdxGroupView) -> "t_target":
+    bit_count = ary.get_bit_count()
+    if isinstance(group_lens, int):
+        group_lens = [group_lens] * -(-bit_count // group_lens)
+    items = [ary.b[s] for s in get_slices_from_diffs(np.cumsum(group_lens) - 1)]
+    if isinstance(t_target, type) and issubclass(t_target, BitFlagGroupView):
+        if t_target is IdxGroupView:
+            return t_target(items)
+        t_target = t_target.group_type
+    return t_target(*items)
+
 
 class GTest(BitFlagGroupView):
     sign: NBitArray
