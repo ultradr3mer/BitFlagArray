@@ -35,6 +35,5 @@ hermes_weights_data=np.array([1044528450,
                                 3088725648,
                                 3150069521],dtype=np.uint32)
 
-@pytest.fixture
-def hermes_weights():
+def get_hermes_weights():
     return hermes_weights_data
