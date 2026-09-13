@@ -343,9 +343,6 @@ def set_index_array(array: np.ndarray, key, value):
     else:
         array[key] = value
 
-class BitFlagGroupView: ...\
-
-class IdxGroupView(BitFlagGroupView): ... \
 
 class NBitArray(ABC):
     """Interface for arrays of variable item bit count."""
@@ -400,7 +397,7 @@ class NBitArray(ABC):
         return get_defined_bits(self)
 
     def g(self, group_lengths: int | Tuple[int, ...],
-                t_target: Type[NamedTuple] | Type[BitFlagGroupView] = IdxGroupView) -> t_target:
+          t_target: "Type[NamedTuple] | Type[BitFlagGroupView] | None" = None) -> "t_target":
         """View for gruppierte selection."""
         return build_groups(self, group_lengths, t_target)
 
@@ -910,7 +907,9 @@ class IdxGroupView(BitFlagGroupView):
 
 
 def build_groups(ary: NBitArray, group_lens: int | Tuple[int, ...],
-                 t_target: Type[BitFlagGroupView] = IdxGroupView) -> "t_target":
+                 t_target: Type[NamedTuple] | Type[BitFlagGroupView] | None = None) -> "t_target":
+    if t_target is None:
+        t_target = IdxGroupView  # late binding: real class is defined below, resolved at call time
     bit_count = ary.get_bit_count()
     if isinstance(group_lens, int):
         group_lens = [group_lens] * -(-bit_count // group_lens)
