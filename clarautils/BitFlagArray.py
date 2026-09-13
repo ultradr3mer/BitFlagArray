@@ -393,7 +393,7 @@ class NBitArray(ABC):
         return get_defined_bits(self)
 
     def g(self, group_lengths: int | Tuple[int, ...],
-                t_target: Type[NamedTuple] | Type[Tuple] = tuple) -> t_target:
+                t_target: Type[NamedTuple] | Type[BitFlagGroupView] = IdxGroupView) -> t_target:
         """View for gruppierte selection."""
         return build_groups(self, group_lengths, t_target)
 
@@ -922,16 +922,23 @@ class GTest(BitFlagGroupView):
 
 
 if __name__ == '__main__':
+    def show(title, view):
+        # one info line + two markers: the bit matrices alone have no visible border
+        print(f"### {title} ###")
+        print("--- begin ---")
+        print(view)
+        print("--- end ---")
+
     data = get_hermes_weights()
     ary = Bitty(data, 32).i[:5]
-    test  = GTest.create_from(ary, [8, 8, 16])
-    print(test) # put some eplanation herer and over the other print
-    print(test.sign) # one for info and two for marking, hard to tell the begin and end rn
-    print(test.mantissa)
+    test = GTest.create_from(ary, [8, 8, 16])
+    show("GTest.create_from(ary, [8, 8, 16]) -- one field per group", test)
+    show("test.sign -- bits 0..8 of each item", test.sign)
+    show("test.mantissa -- bits 16..32 of each item", test.mantissa)
 
     test2 = build_groups(ary, [8, 8, 16])
-    print(test2)
-    print(test2[0])
-    print(test2[:, 0])
+    show("build_groups(ary, [8, 8, 16]) -- default target: IdxGroupView", test2)
+    show("test2[0] -- first group", test2[0])
+    show("test2[:, 0] -- bit 0 of every group, as matrix", test2[:, 0])
 
     print("end")
