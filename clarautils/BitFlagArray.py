@@ -887,6 +887,9 @@ class IdxGroupView(BitFlagGroupView):
         self.groups = groups
 
     def __getitem__(self, idx):
+        if isinstance(idx, tuple):
+            return np.array([g.b[idx[1]] for g in self.groups[idx[0]]])
+
         return self.groups[idx]
 
     def __len__(self):
@@ -920,13 +923,15 @@ class GTest(BitFlagGroupView):
 
 if __name__ == '__main__':
     data = get_hermes_weights()
-    ary = Bitty(data, 32)
+    ary = Bitty(data, 32).i[:5]
     test  = GTest.create_from(ary, [8, 8, 16])
-    print(test)
-    print(test.sign)
-    print(test.exponent)
+    print(test) # put some eplanation herer and over the other print
+    print(test.sign) # one for info and two for marking, hard to tell the begin and end rn
     print(test.mantissa)
 
     test2 = build_groups(ary, [8, 8, 16])
     print(test2)
     print(test2[0])
+    print(test2[:, 0])
+
+    print("end")
