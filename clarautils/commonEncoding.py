@@ -293,3 +293,7 @@ def get_defined_bits(a, bit_count=None) -> List[DefinedBit]:
     idx = np.flatnonzero(and_bits == or_bits)
     return [DefinedBit(int(i), int(b)) for i, b in zip(idx, and_bits[idx])]
 
+def get_slices_from_diffs(d: npt.NDArray):
+    bounds = np.r_[0, d + 1]
+    ranges = [slice(a, b) for a, b in zip(bounds[:-1], bounds[1:])]
+    return ranges
