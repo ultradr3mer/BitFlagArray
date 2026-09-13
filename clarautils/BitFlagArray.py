@@ -343,6 +343,9 @@ def set_index_array(array: np.ndarray, key, value):
     else:
         array[key] = value
 
+class BitFlagGroupView: ...\
+
+class IdxGroupView(BitFlagGroupView): ... \
 
 class NBitArray(ABC):
     """Interface for arrays of variable item bit count."""
@@ -366,7 +369,11 @@ class NBitArray(ABC):
         return len(self.get_array())
 
     def __repr__(self):
-        return f"{type(self)}, bit_length={self.get_bit_count()},\n{get_bits(self.get_array(), self.get_bit_count())}"
+        s_rep = f"{get_bits(self.get_array(), self.get_bit_count())}".splitlines()
+        s_rep[0] = s_rep[0] + f" (bit_length={self.get_bit_count()}/items={self.get_item_count()})"
+        type_line = 1 if len(s_rep) > 0 else 0
+        s_rep[type_line] = s_rep[type_line] + f" ({type(self)})"
+        return "\n".join(s_rep)
 
     def __eq__(self, other):
         return np.array(self) == np.array(other)
@@ -899,11 +906,11 @@ class IdxGroupView(BitFlagGroupView):
         return iter(self.groups)
 
     def __repr__(self):
-        return f"{type(self).__name__}(groups={self.groups!r})"
+        return f"{type(self).__name__}(groups={{\n{self.groups!r}\n}})"
 
 
 def build_groups(ary: NBitArray, group_lens: int | Tuple[int, ...],
-                 t_target: Type[NamedTuple] | Type[BitFlagGroupView] = IdxGroupView) -> "t_target":
+                 t_target: Type[BitFlagGroupView] = IdxGroupView) -> "t_target":
     bit_count = ary.get_bit_count()
     if isinstance(group_lens, int):
         group_lens = [group_lens] * -(-bit_count // group_lens)
@@ -924,10 +931,9 @@ class GTest(BitFlagGroupView):
 if __name__ == '__main__':
     def show(title, view):
         # one info line + two markers: the bit matrices alone have no visible border
+        print("")
         print(f"### {title} ###")
-        print("--- begin ---")
         print(view)
-        print("--- end ---")
 
     data = get_hermes_weights()
     ary = Bitty(data, 32).i[:5]
