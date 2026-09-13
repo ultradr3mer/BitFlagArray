@@ -9,6 +9,8 @@ import weakref
 import numpy as np
 import numpy.typing as npt
 
+from exampe_data import  hermes_weights
+
 try:
     from .commonTyping import get_type_for_bit_count
     from .commonEncoding import (
@@ -20,6 +22,7 @@ try:
         get_bitwise_mean,
         get_defined_bits,
         DefinedBit,
+        get_slices_from_diffs
     )
 except ImportError:
     from commonTyping import get_type_for_bit_count
@@ -850,3 +853,30 @@ class BitFlagIndex:
 
 
 BittyIndex = BitFlagIndex
+
+
+class BitFlagGroupView(NamedTuple): ...
+
+@staticmethod
+def build_groups(ary: NBitArray, group_lens: int | Tuple[int,...], t_target: Type[BitFlagGroupView] ) -> t_target:
+    group_lens = [group_lens for _ in range(ary.get_bit_count() / group_lens + 1)] \
+               if isinstance(group_lens, int) else group_lens
+    sliced = [ary.b[s] for s in get_slices_from_diffs(group_lens)]
+    return t_target(*sliced)
+
+class BitFlagGroupView(NamedTuple):
+    pass
+
+    @classmethod
+    def create_from(cls, ary: SliceView, group_lens: int | Tuple[int,...]):
+        return build_groups(ary, group_lens, type(cls))
+class GTest(BitFlagGroupView):
+    sign: NBitArray
+    exponent: NBitArray
+    mantissa: NBitArray
+
+if __name__ == '__main__':
+    data: np.array = hermes_weights
+    ary = NBitAryOnly(data,32)
+    test = GTest.create_from(ary, [8, 8, 16] )
+    print(test)
