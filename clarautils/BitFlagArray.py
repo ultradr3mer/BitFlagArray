@@ -9,7 +9,7 @@ import weakref
 import numpy as np
 import numpy.typing as npt
 
-from exampe_data import  hermes_weights
+from exampe_data import  get_hermes_weights
 
 try:
     from .commonTyping import get_type_for_bit_count
@@ -35,6 +35,7 @@ except ImportError:
         get_bitwise_mean,
         get_defined_bits,
         DefinedBit,
+        get_slices_from_diffs
     )
 
 
@@ -869,14 +870,15 @@ class BitFlagGroupView(NamedTuple):
 
     @classmethod
     def create_from(cls, ary: SliceView, group_lens: int | Tuple[int,...]):
-        return build_groups(ary, group_lens, type(cls))
-class GTest(BitFlagGroupView):
+        return build_groups(ary, group_lens, cls)
+
+class GTest(NamedTuple):
     sign: NBitArray
     exponent: NBitArray
     mantissa: NBitArray
 
 if __name__ == '__main__':
-    data: np.array = hermes_weights
-    ary = NBitAryOnly(data,32)
+    data: np.array = get_hermes_weights()
+    ary = Bitty(data,32)
     test = GTest.create_from(ary, [8, 8, 16] )
     print(test)
