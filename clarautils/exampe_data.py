@@ -1,6 +1,5 @@
 # model.layers.0.input_layernorm.weight.bin
 import numpy as np
-import pytest
 
 hermes_weights_data=np.array([1044528450,
                                 1016020695,

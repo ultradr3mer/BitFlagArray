@@ -1,7 +1,7 @@
 from abc import abstractmethod, abstractproperty, ABC
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import List, Iterable, Tuple, Dict, Union
+from typing import List, Iterable, Tuple, Dict, Union, Type, get_type_hints
 from typing import NamedTuple, Set, Literal
 
 import weakref
@@ -9,7 +9,10 @@ import weakref
 import numpy as np
 import numpy.typing as npt
 
-from exampe_data import  get_hermes_weights
+try:
+    from .exampe_data import get_hermes_weights
+except ImportError:
+    from exampe_data import get_hermes_weights
 
 try:
     from .commonTyping import get_type_for_bit_count
@@ -389,6 +392,11 @@ class NBitArray(ABC):
         """Bits that are constant over all items, as (idx, bit) pairs; MSB-first, without unpacking."""
         return get_defined_bits(self)
 
+    def g(self, group_lengths: int | Tuple[int, ...],
+                t_target: Type[NamedTuple] | Type[Tuple] = tuple) -> t_target:
+        """View for gruppierte selection."""
+        return build_groups(self, group_lengths, t_target)
+
     @abstractproperty
     def b(self) -> SliceView:
         """View for bitwise selection."""
@@ -410,6 +418,7 @@ class NBitArray(ABC):
 
     def split_i(self, key) -> Tuple[SliceView, SliceView]:
         return self.i[key], self.rm_i(key)
+
 
 
 @dataclass
@@ -856,29 +865,45 @@ class BitFlagIndex:
 BittyIndex = BitFlagIndex
 
 
-class BitFlagGroupView(NamedTuple): ...
 
-@staticmethod
-def build_groups(ary: NBitArray, group_lens: int | Tuple[int,...], t_target: Type[BitFlagGroupView] ) -> t_target:
-    group_lens = [group_lens for _ in range(ary.get_bit_count() / group_lens + 1)] \
-               if isinstance(group_lens, int) else group_lens
-    sliced = [ary.b[s] for s in get_slices_from_diffs(group_lens)]
-    return t_target(*sliced)
 
-class BitFlagGroupView(NamedTuple):
-    pass
+def build_groups(ary: NBitArray, group_lens: int | Tuple[int, ...],
+                      t_target: Type[NamedTuple] | Type[Tuple] = tuple) -> t_target:
+    bit_count = ary.get_bit_count()
+    if isinstance(group_lens, int):
+        group_lens = [group_lens] * -(-bit_count // group_lens)
+    items = [ary.b[s] for s in get_slices_from_diffs(np.cumsum(group_lens) - 1)]
+    result = tuple(items) if t_target is tuple else t_target(*items)
+    return result
+
+
+class BitFlagGroupView:
+    """Marker base: declare group fields once, create_from builds the NamedTuple."""
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.group_type = NamedTuple(cls.__name__, list(get_type_hints(cls).items()))
 
     @classmethod
-    def create_from(cls, ary: SliceView, group_lens: int | Tuple[int,...]):
-        return build_groups(ary, group_lens, cls)
+    def create_from(cls, ary: NBitArray, group_lens: int | Tuple[int, ...]) -> cls:
+        return build_groups(ary, group_lens, cls.group_type)
 
-class GTest(NamedTuple):
+
+class GTest(BitFlagGroupView):
     sign: NBitArray
     exponent: NBitArray
     mantissa: NBitArray
 
+
 if __name__ == '__main__':
-    data: np.array = get_hermes_weights()
-    ary = Bitty(data,32)
-    test = GTest.create_from(ary, [8, 8, 16] )
+    data = get_hermes_weights()
+    ary = Bitty(data, 32)
+    test  = GTest.create_from(ary, [8, 8, 16])
     print(test)
+    print(test.sign)
+    print(test.exponent)
+    print(test.mantissa)
+
+    test2 = build_groups(ary, [8, 8, 16])
+    print(test2)
+    print(test2[0])
