@@ -1,7 +1,28 @@
 import string
-from typing import TypeVar, Generic, Type, List, Iterable, Any
+from typing import TypeVar, Generic, Type, List, Iterable, Any, NamedTuple, Tuple
 
 import numpy as np
+
+
+class MultiIndex[T_index: Tuple[Any, ...]](NamedTuple):
+    """Generic wrapper: the wrapped index tuple is the single field."""
+    index: T_index
+
+
+class ItemBitIndex(MultiIndex[Tuple[int, ...]]):
+    """index = (item, bit); item/bit are read-only views on index."""
+
+    @property
+    def item(self) -> int:
+        return self.index[0]
+
+    @property
+    def bit(self) -> int:
+        return self.index[1]
+
+    @staticmethod
+    def create_from(item: int, bit: int):
+        return ItemBitIndex([item, bit])
 
 
 def safe_iter(iter, default):

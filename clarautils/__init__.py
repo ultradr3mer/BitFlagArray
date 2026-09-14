@@ -9,6 +9,8 @@ from .common import (
     ExcRaiser,
     AccessibleAry,
     iter_bits,
+    MultiIndex,
+    ItemBitIndex,
 )
 from .commonTyping import (
     INTEGER_TYPES,
@@ -116,7 +118,7 @@ from .BitFlagArray import (
 )
 
 __all__ = [
-    "get_first_or", "get_first_or_default", "ExceptionRaiser", "ExcRaiser", "AccessibleAry", "iter_bits",
+    "get_first_or", "get_first_or_default", "ExceptionRaiser", "ExcRaiser", "AccessibleAry", "iter_bits", "MultiIndex", "ItemBitIndex",
     "INTEGER_TYPES", "DTableFields", "TypeTable", "build_type_tbl",
     "get_type_for_scalar", "get_type_for_bit_count", "get_type_for_array",
     "get_as_signed", "get_as_unsigned", "get_as_fitting",

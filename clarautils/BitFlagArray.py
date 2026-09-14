@@ -15,6 +15,7 @@ except ImportError:
     from exampe_data import get_hermes_weights
 
 try:
+    from .common import ItemBitIndex, MultiIndex
     from .commonTyping import get_type_for_bit_count
     from .commonEncoding import (
         get_bitmask,
@@ -28,6 +29,7 @@ try:
         get_slices_from_diffs
     )
 except ImportError:
+    from common import ItemBitIndex, MultiIndex
     from commonTyping import get_type_for_bit_count
     from commonEncoding import (
         get_bitmask,
@@ -41,6 +43,9 @@ except ImportError:
         get_slices_from_diffs
     )
 
+# types for supported keys
+type t_key_single_dim = int | slice | List[int]
+type t_key_multi_dim  = Tuple[t_key_single_dim, ...] | List[t_key_single_dim, ...]
 
 # ------------------------------------------------------------------ #
 #  Read-once / cache configuration
@@ -881,19 +886,39 @@ class BitFlagGroupView:
     def create_from(cls, ary: NBitArray, group_lens: int | Tuple[int, ...]) -> "cls":
         return build_groups(ary, group_lens, cls)
 
+def isanyinstance(t:type, t_other: Tuple[type] | Union[type]):
+    return any([isinstance(t, type) for t in t_other])
 
 class IdxGroupView(BitFlagGroupView):
-    """Generic group container: indexable, one entry per group."""
+    """Generic group container: indexable, one entry per group.
+    int / slice / List[int] select groups like the groups list itself;
+    a (grp, bit) tuple stacks the selected bits of the selected groups
+    into ONE NBitArray (view[:, i] = bit i of every group — the column
+    word over groups, first group in the highest bits); ItemBitIndex
+    wraps (grp, bit), a list of those and an (n, 2) ndarray of pairs
+    stack several such views in order."""
 
     groups: List[NBitArray]
 
     def __init__(self, groups: List[NBitArray]):
         self.groups = groups
 
-    def __getitem__(self, idx):
-        if isinstance(idx, tuple):
-            return np.array([g.b[idx[1]] for g in self.groups[idx[0]]])
+    def _stack_bits(self, grp_key, bit_key) -> NBitArray:
+        selected = self.groups[grp_key]
+        if not isinstance(selected, list):
+            selected = [selected]
+        return Bitty.stack_bit_arys(*[g.b[bit_key] for g in selected])
 
+    def __getitem__(self, idx: "t_key_single_dim | t_key_multi_dim | ItemBitIndex | List[ItemBitIndex] | np.ndarray"):
+        if isinstance(idx, ItemBitIndex):
+            return self._stack_bits(idx.item, idx.bit)
+        if isinstance(idx, tuple):
+            return self._stack_bits(idx[0], idx[1])
+        if isinstance(idx, list) and idx and all(isinstance(e, ItemBitIndex) for e in idx):
+            return Bitty.stack_bit_arys(*[self[e] for e in idx])
+        if isinstance(idx, np.ndarray):
+            return Bitty.stack_bit_arys(
+                *[self[ItemBitIndex([int(g), int(b)])] for g, b in idx])
         return self.groups[idx]
 
     def __len__(self):
@@ -944,6 +969,6 @@ if __name__ == '__main__':
     test2 = build_groups(ary, [8, 8, 16])
     show("build_groups(ary, [8, 8, 16]) -- default target: IdxGroupView", test2)
     show("test2[0] -- first group", test2[0])
-    show("test2[:, 0] -- bit 0 of every group, as matrix", test2[:, 0])
+    show("test2[:, 0] -- bit 0 of every group, stacked into one NBitArray", test2[:, 0])
 
     print("end")
