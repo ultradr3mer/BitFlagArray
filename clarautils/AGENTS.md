@@ -18,6 +18,7 @@ Quelle: `F:\source\BitFlagArray`, installiert per `pip install -e F:\source\BitF
 | `BitInfo.py` | `BitInfo` — zusammengeführte Bit-Abfrage (`from_value`/`from_string`, Modi `bits`/`flags`/`indices`/`count`); `get_bits`/`get_bit_flags` in commonEncoding delegieren dorthin |
 | `BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, Bit-Selektion (`select_bits*`), LRU-Cache, `BitFlagIndex`/`BittyIndex` + `FluentBuilder` (Index-Baum über `group_by_bit`) |
 | `Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
+| `BitWriter.py` | `BitWriter`/`BitReader` — sequentielles Bit-Schreiben/-Lesen (MSB-first, `uint8`-Bytes) |
 | `RankedBit.py` | `RankedBit` (rank-first Iteration), `BitGroupWalker` (Odometer über Gruppen), `bits_rank_first*` |
 
 ## Kernkonzepte

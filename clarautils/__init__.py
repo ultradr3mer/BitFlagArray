@@ -71,6 +71,7 @@ from .QueryableTable import (
     build_type_table,
 )
 from .Mulitslice import Multislice
+from .BitWriter import BitWriter, BitReader
 from .RankedBit import (
     RankedBit,
     BitGroupWalker,
@@ -132,6 +133,7 @@ __all__ = [
     "Query", "Constraint", "ConstraintColumn", "CCol", "QueryableTable", "QTblSpecialCol",
     "Undefined", "build_type_table",
     "Multislice",
+    "BitWriter", "BitReader",
     "RankedBit", "BitGroupWalker", "bits_rank_first", "bits_rank_first_from_flags",
     "bits_combs_by_rank", "rank_states", "rank_states_per_rank",
     "NBitArray", "NBitAryOnly", "BitFlagArray", "Bitty", "DefinedBit", "SliceView", "sliceTypes",

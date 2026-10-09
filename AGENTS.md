@@ -25,6 +25,7 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
 | `clarautils/BitFlagArray.py` | `BitFlagArray`/`Bitty`, `SliceView`, LRU-Cache, **`BitFlagIndex`/`BittyIndex`** (Index-Baum über `group_by_bit`, per `FluentBuilder`: `index_by(key).then_by(*keys).with_leafs(key).index_by_key/slice/fullindex().build()`; Keys: `slice`/`int`/`list[int]` mit `group_by_bit`-Semantik, `list[int]` = EIN Level über mehrere Bits; `with_leafs(key)` fügt KEIN Level hinzu — die tiefste `then_by`-Gruppe wird direkt Blatt, `key` selektiert `leaf.data` (`view.b[key]`), Leaf-Wert wird lokal im Blatt aufgelöst; Blätter materialisiert mit `key_path` + absoluten `item_indices`; `dispose_bitty=True` verwirft die Bitty nach `build` + invalidiert den Cache) |
 | `clarautils/Mulitslice.py` | `Multislice` (Schreibweise "Mulitslice" ist Legacy — **nicht umbenennen**) |
 | `clarautils/RankedBit.py` | `RankedBit` (rank-first: erst 1-Bit-Werte, dann 2, ...; lex-Ordnung innerhalb Rang wie `itertools.combinations`), `BitGroupWalker` (Odometer über mehrere RankedBit-Masken, Combined = OR), `RankIndexMin` (Ranking über `BittyIndex`: `row_from_cols`/`cols_from_row` via key/int-Abstieg + Leaf-Daten) — `index_in_rank`/`_from_global_index`/`get_next` laufen über den Index (`get_next` = `_from_global_index(gidx+1)`, Floors/Ceilings kombinatorisch via `rank_states`/`comb`, voller Rang k==n als Spezialfall); Anker-Funktionen (`_get_rank_index` etc.) und `_lex_rank`/`_lex_unrank` sind entfernt |
+| `clarautils/BitWriter.py` | `BitWriter` (`put(bool)` / `put(int, length)` / `put(_, [bits])`, MSB-first in Bytes, `get_bytes()` → `uint8`) + `BitReader` (`get_bool`/`get_int(n)` → `CommonNBitSc`) |
 | `Multislice.md` | Benchmarks + Faustregeln zur Bit-Selektion |
 | `README.md` | **veraltet** (PlainTable/TableCreator-Ära) — nicht vertrauen |
 
@@ -64,7 +65,7 @@ BitFlagArray — gepackte Bit-Daten (BitFlagArray/Bitty), typisierte Tabellen ü
   `& .\.venv\Scripts\python.exe -m pytest Test -q`
 - **Bewusst defekt** (bei Bedarf mit dem Nutzer abklären): `Test/test_common.py`, `Test/test_DebugPrint.py` (stale `from common import get_type_for_*`); `Test/test_association.py`, `Test/test_reverseEncoding.py` (Module in 3beb11e gelöscht); `Test/test_RankedBit.py` (importiert die auskommentierten Anker-Funktionen); `Test/test_BitFlagArray.py::test_stack_items*` (`stack_items` ist auskommentiert).
 - `Test/test_perf*.py` sind Benchmarks (~50 s); `Test/conftest.py` hat eine autouse-Fixture, die BitFlagArray importiert und den Cache räumt.
-- Referenz ohne die defekten + Perf: **275 passed** (Stand BitFlagIndex-Einführung; die 2 `stack_items`-Failures sind in der Defekt-Liste).
+- Referenz ohne die defekten + Perf: **285 passed** (Stand BitWriter-Einführung; die 2 `stack_items`-Failures sind in der Defekt-Liste).
 - Schnellster Smoke-Test: die `__main__`-Demos der Module laufen lassen: `& .\.venv\Scripts\python.exe -m clarautils.GenericTable` (analog `clarautils.QueryableTable`, `clarautils.commonTyping`, `clarautils.Mulitslice`).
 
 ## Workflow
