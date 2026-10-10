@@ -37,6 +37,11 @@ class BitInfo:
                     "Float not allowed, but provided, use acc_floats=True to let BitInfo get a shot at parsing them")
             return get_as_unsigned(v_sub, fit=True, acc_floats=acc_floats)
 
+        def _widen(v):
+            # shift in uint64: a narrow signed cast (e.g. 128 -> int8 -128) would sign-extend
+            v = np.asarray(v)
+            return v.astype(np.uint64) if v.dtype.kind == 'u' or (v >= 0).all() else v.astype(np.int64)
+
         mode = BitInfo.Mode(mode)
 
         if isinstance(value, str):
@@ -62,7 +67,8 @@ class BitInfo:
                     return flags
                 return np.searchsorted(flags_range, flags)
             if mode == BitInfo.Mode.BITS:
-                return (get_as_signed(value) >> bit_range_bits) & 1
+                w = _widen(value)
+                return ((w >> bit_range_bits.astype(w.dtype)) & 1).astype(np.int64)
         else:
             value = get_signed_or_raise(value)
             if mode in BitInfo.FLAGS_SUBTYPES:
@@ -78,7 +84,8 @@ class BitInfo:
                     return flags
                 return np.searchsorted(flags_range, flags)
             if mode == BitInfo.Mode.BITS:
-                return (get_as_signed(value.reshape((-1, 1))) >> bit_range_bits) & 1
+                w = _widen(value.reshape((-1, 1)))
+                return ((w >> bit_range_bits.astype(w.dtype)) & 1).astype(np.int64)
 
         raise Exception("invalid Value")
 

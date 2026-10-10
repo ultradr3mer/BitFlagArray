@@ -70,12 +70,19 @@ def get_number(value: npt.NDArray[np.unsignedinteger] | List[int] | List[List[in
     bit_range = np.arange(bit_count - 1, -1, -1)
 
     if value.ndim == 1:
-        value = int(np.sum((value << bit_range), axis=0))
-        return CommonNBitSc(value, bit_count)
+        # Python ints: no int64 overflow at bit 63 (or wider)
+        number = 0
+        for b in value.tolist():
+            number = (number << 1) | int(b)
+        return CommonNBitSc(number, bit_count)
     else:
         if  axis == 0:
             value = value.swapaxes(1, axis)
-        value = np.sum((value << bit_range), axis=1)
+        if bit_count <= 64:
+            # unsigned so bit 63 doesn't overflow int64; bits are disjoint, the sum can't wrap
+            value = np.sum(value.astype(np.uint64) << bit_range.astype(np.uint64), axis=1, dtype=np.uint64)
+        else:
+            value = np.sum((value << bit_range), axis=1)
         return CommonNBitAry(value.astype(get_type_for_array(value)), bit_count)
 
 
@@ -227,13 +234,15 @@ def get_bitwise_entropy(a, bit_count=None) -> npt.NDArray[np.float32]:
         if bit_count is None:
             raise ValueError("bit_count is required for plain arrays")
 
-    v = np.asarray(v, dtype=np.int64).ravel()
+    v = np.asarray(v)
+    # unsigned stays unsigned (uint64 + uint64 shifts) so bit 63 survives
+    v = (v.astype(np.uint64) if v.dtype.kind == 'u' else v.astype(np.int64)).ravel()
     if v.size == 0:
         return np.zeros(bit_count, dtype=np.float32)
 
     p = np.zeros(bit_count, dtype=np.float32)
     for i in range(bit_count):
-        p[i] = np.mean((v >> (bit_count - 1 - i)) & 1)
+        p[i] = np.mean((v >> v.dtype.type(bit_count - 1 - i)) & v.dtype.type(1))
 
     entropy = np.zeros(bit_count, dtype=np.float32)
     mask = (p > 0) & (p < 1)
@@ -263,7 +272,8 @@ def get_bitwise_mean(a, bit_count=None, axis=1) -> npt.NDArray[np.float64]:
     if axis == 1:
         return np.bitwise_count(v).astype(np.float64) / bit_count
 
-    shifts = np.arange(bit_count - 1, -1, -1, dtype=np.intp)
+    # shift by the array's own dtype: uint64 >> intp has no common integer type
+    shifts = np.arange(bit_count - 1, -1, -1).astype(v.dtype)
     return np.array([np.count_nonzero((v >> s) & 1) for s in shifts], dtype=np.float64) / v.size
 
 
@@ -287,11 +297,16 @@ def get_defined_bits(a, bit_count=None) -> List[DefinedBit]:
     if len(ary) == 0:
         return []
 
-    shifts = np.arange(bit_count - 1, -1, -1, dtype=np.intp)
-    and_bits = (int(np.bitwise_and.reduce(ary)) >> shifts) & 1
-    or_bits = (int(np.bitwise_or.reduce(ary)) >> shifts) & 1
-    idx = np.flatnonzero(and_bits == or_bits)
-    return [DefinedBit(int(i), int(b)) for i, b in zip(idx, and_bits[idx])]
+    # shift Python ints: a reduce result >= 2**63 can't be combined with intp shifts
+    and_val = int(np.bitwise_and.reduce(ary))
+    or_val = int(np.bitwise_or.reduce(ary))
+    result = []
+    for i in range(bit_count):
+        s = bit_count - 1 - i
+        b = (and_val >> s) & 1
+        if b == (or_val >> s) & 1:
+            result.append(DefinedBit(i, b))
+    return result
 
 def get_slices_from_diffs(d: npt.NDArray):
     bounds = np.r_[0, d + np.ones_like(d)]
